@@ -1,0 +1,1 @@
+"""Core de l'application : configuration, sécurité et dépendances."""

@@ -1,0 +1,60 @@
+# ==============================
+# MboaFind - Fichier .gitignore
+# ==============================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+
+# ---- Variables d'environnement ----
+.env
+.env.*
+!.env.example
+
+# ---- Base de données ----
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# ---- Node / Frontend ----
+node_modules/
+frontend/dist/
+dist-ssr/
+*.local
+.vite/
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- IDE / Éditeurs ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Tests / Coverage ----
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml

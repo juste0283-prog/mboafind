@@ -1,0 +1,1 @@
+"""Package des schemas Pydantic (validation des entrees/sorties)."""

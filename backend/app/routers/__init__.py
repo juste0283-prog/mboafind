@@ -1,0 +1,1 @@
+"""Package des routers FastAPI (couche HTTP uniquement)."""

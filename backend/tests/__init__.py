@@ -1,0 +1,1 @@
+"""Package des tests pytest du backend MboaFind."""
