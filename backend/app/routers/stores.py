@@ -1,11 +1,17 @@
 """Routes des boutiques (/api/v1/stores) et confirmation de prix."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user, get_db, require_roles
 from app.models.enums import UserRole
-from app.schemas.price import PriceConfirmRead, PriceCreate, PriceManageRead, PriceUpdate
+from app.schemas.price import (
+    PriceConfirmRead,
+    PriceCreate,
+    PriceHistoryRead,
+    PriceManageRead,
+    PriceUpdate,
+)
 from app.schemas.product import ProductAdminRead, ProductCreate, ProductUpdate
 from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
 from app.services import catalog
@@ -212,5 +218,24 @@ def confirm_price(
     current_user=Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> PriceConfirmRead:
-    """Un client connecte confirme qu'un prix est exact (fraicheur de l'info)."""
-    return catalog.confirm_price(db, price_id)
+    """Un client connecte confirme qu'un prix est exact (fraicheur de l'info).
+
+    Un client ne peut confirmer un prix qu'une seule fois : une seconde
+    tentative renvoie already_confirmed=True sans recompter.
+    """
+    return catalog.confirm_price(db, current_user, price_id)
+
+
+# ------------------------------------------------ historique prix
+@prices_router.get(
+    "/{price_id}/history",
+    response_model=list[PriceHistoryRead],
+    summary="Historique d'une offre de prix",
+)
+def get_price_history(
+    price_id: int,
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> list[PriceHistoryRead]:
+    """Anciennes valeurs d'une offre de prix (ordre chronologique inverse)."""
+    return catalog.get_price_history(db, price_id, limit=limit)

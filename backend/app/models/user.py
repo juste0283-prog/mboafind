@@ -28,6 +28,9 @@ class User(Base):
     professional: Mapped["Professional | None"] = relationship(back_populates="user", uselist=False)
     reviews: Mapped[list["Review"]] = relationship(back_populates="author")
     reports: Mapped[list["Report"]] = relationship(back_populates="reporter")
+    favorites: Mapped[list["Favorite"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email!r} role={self.role}>"

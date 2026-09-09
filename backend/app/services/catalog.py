@@ -18,9 +18,21 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models import Category, Price, Product, Review, Store
-from app.models.enums import ReviewModerationStatus
+from app.models.enums import (
+    PriceVerificationStatus,
+    ReportStatus,
+    ReportTargetType,
+    ReviewModerationStatus,
+)
+from app.models.price_confirmation import PriceConfirmation
+from app.models.price_history import PriceHistory
 from app.schemas.category import CategoryRead, CategorySummary
-from app.schemas.price import PriceConfirmRead, PriceManageRead, PriceRead
+from app.schemas.price import (
+    PriceConfirmRead,
+    PriceHistoryRead,
+    PriceManageRead,
+    PriceRead,
+)
 from app.schemas.product import (
     ProductAdminRead,
     ProductCreate,
@@ -30,6 +42,7 @@ from app.schemas.product import (
     ProductUpdate,
 )
 from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
+from app.services.trust import compute_trust_score
 from app.utils.slug import slugify, normalize_text, split_terms
 from app.utils.time import utcnow
 
@@ -173,8 +186,14 @@ def _review_to_read(review: Review):
     }
 
 
-def _price_to_read(price: Price, store: Store) -> PriceRead:
-    """Serialize une offre (prix + boutique)."""
+def _price_to_read(
+    price: Price,
+    store: Store,
+    *,
+    db: Session,
+    confirmed_by_me: bool = False,
+) -> PriceRead:
+    """Serialize une offre (prix + boutique) avec son score de confiance."""
     return PriceRead(
         id=price.id,
         store_id=store.id,
@@ -188,6 +207,8 @@ def _price_to_read(price: Price, store: Store) -> PriceRead:
         updated_at=price.updated_at,
         confirmed_count=price.confirmed_count,
         last_confirmed_at=price.last_confirmed_at,
+        trust_score=compute_trust_score(db, price, store),
+        confirmed_by_me=confirmed_by_me,
     )
 
 
@@ -294,7 +315,11 @@ def _closest_store_distance(product: Product, lat: float, lng: float) -> float:
         if store.latitude is not None and store.longitude is not None
     ]
     return min(distances) if distances else math.inf
-def get_product(db: Session, product_id: int) -> ProductDetail:
+def get_product(
+    db: Session,
+    product_id: int,
+    current_user=None,
+) -> ProductDetail:
     """Fiche produit detaillee avec la liste complete des offres (6.3)."""
     product = db.get(Product, product_id)
     if product is None or not product.is_active:
@@ -314,7 +339,25 @@ def get_product(db: Session, product_id: int) -> ProductDetail:
     store_ids = agg["store_ids"] if agg else set()
     avg, count = _rating_for_stores(db, store_ids)
 
-    offers = [_price_to_read(price, store) for price, store, _ in rows]
+    # Offres confirmees par l'utilisateur courant (une confirmation max par prix).
+    confirmed_ids: set[int] = set()
+    if current_user is not None and rows:
+        confirmed_ids = {
+            c.price_id
+            for c in db.query(PriceConfirmation.price_id)
+            .filter(
+                PriceConfirmation.user_id == current_user.id,
+                PriceConfirmation.price_id.in_([p.id for p, _, _ in rows]),
+            )
+            .all()
+        }
+
+    offers = [
+        _price_to_read(
+            price, store, db=db, confirmed_by_me=price.id in confirmed_ids
+        )
+        for price, store, _ in rows
+    ]
     # Offres disponibles d'abord, puis par prix croissant.
     offers.sort(key=lambda o: (not o.is_available, o.amount))
 
@@ -338,15 +381,41 @@ def get_product(db: Session, product_id: int) -> ProductDetail:
     )
 
 
-def confirm_price(db: Session, price_id: int) -> PriceConfirmRead:
-    """Un client confirme qu'un prix observe est exact (6.3, workflow prix)."""
+def confirm_price(db: Session, user, price_id: int) -> PriceConfirmRead:
+    """Un client confirme qu'un prix observe est exact (6.3, workflow prix).
+
+    Un client ne peut confirmer un prix qu'une seule fois : une seconde
+    tentative est idempotente (aucun double comptage, flag already_confirmed).
+    """
     price = db.get(Price, price_id)
     if price is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Offre de prix introuvable"
         )
+
+    existing = (
+        db.query(PriceConfirmation)
+        .filter(
+            PriceConfirmation.price_id == price_id,
+            PriceConfirmation.user_id == user.id,
+        )
+        .first()
+    )
+    if existing is not None:
+        return PriceConfirmRead(
+            price_id=price.id,
+            confirmed_count=price.confirmed_count,
+            last_confirmed_at=price.last_confirmed_at,
+            message="Vous avez deja confirme ce prix.",
+            already_confirmed=True,
+        )
+
+    confirmation = PriceConfirmation(price_id=price.id, user_id=user.id)
+    db.add(confirmation)
     price.confirmed_count += 1
     price.last_confirmed_at = utcnow()
+    if price.verification_status == PriceVerificationStatus.PENDING:
+        price.verification_status = PriceVerificationStatus.VERIFIED
     db.add(price)
     db.commit()
     db.refresh(price)
@@ -355,6 +424,32 @@ def confirm_price(db: Session, price_id: int) -> PriceConfirmRead:
         confirmed_count=price.confirmed_count,
         last_confirmed_at=price.last_confirmed_at,
     )
+
+
+def get_price_history(db: Session, price_id: int, limit: int = 50) -> list[PriceHistoryRead]:
+    """Anciennes valeurs d'une offre de prix (ordre chronologique inverse)."""
+    price = db.get(Price, price_id)
+    if price is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Offre de prix introuvable"
+        )
+    history = (
+        db.query(PriceHistory)
+        .filter(PriceHistory.price_id == price_id)
+        .order_by(PriceHistory.changed_at.desc(), PriceHistory.id.desc())
+        .limit(min(max(1, limit), 100))
+        .all()
+    )
+    return [
+        PriceHistoryRead(
+            id=h.id,
+            amount=float(h.amount),
+            currency=h.currency,
+            is_available=h.is_available,
+            changed_at=h.changed_at,
+        )
+        for h in history
+    ]
 
 
 # ----------------------------------------------------------------- boutique
@@ -603,6 +698,19 @@ def delete_product(db: Session, user, product_id: int) -> None:
 
 
 # --------------------------------------------------- CRUD prix (commercant)
+def _record_price_history(db: Session, price: Price) -> None:
+    """Conserve l'ancienne valeur d'une offre avant modification."""
+    db.add(
+        PriceHistory(
+            price_id=price.id,
+            amount=float(price.amount),
+            currency=price.currency,
+            is_available=price.is_available,
+            changed_at=price.updated_at,
+        )
+    )
+
+
 def create_price(
     db: Session, user, store_id: int, product_id: int, payload
 ) -> PriceManageRead:
@@ -619,6 +727,8 @@ def create_price(
         .first()
     )
     if existing:
+        if float(existing.amount) != payload.amount or existing.is_available != payload.is_available:
+            _record_price_history(db, existing)
         existing.amount = payload.amount
         existing.is_available = payload.is_available
         existing.updated_at = utcnow()
@@ -643,6 +753,7 @@ def create_price(
         verification_status=price.verification_status,
         updated_at=price.updated_at,
         confirmed_count=price.confirmed_count,
+        trust_score=compute_trust_score(db, price, store),
     )
 
 
@@ -667,6 +778,7 @@ def list_my_prices(db: Session, user, store_id: int) -> list[PriceManageRead]:
             verification_status=p.verification_status,
             updated_at=p.updated_at,
             confirmed_count=p.confirmed_count,
+            trust_score=compute_trust_score(db, p, p.store) if p.store else 0,
         )
         for p in prices
     ]
@@ -679,7 +791,13 @@ def update_price(db: Session, user, price_id: int, payload) -> PriceManageRead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Offre de prix introuvable"
         )
-    _ensure_store_owner_of_price(db, price.store_id, user)
+    store = _ensure_store_owner_of_price(db, price.store_id, user)
+    amount_changes = payload.amount is not None and float(price.amount) != payload.amount
+    availability_changes = (
+        payload.is_available is not None and price.is_available != payload.is_available
+    )
+    if amount_changes or availability_changes:
+        _record_price_history(db, price)
     if payload.amount is not None:
         price.amount = payload.amount
     if payload.is_available is not None:
@@ -699,6 +817,7 @@ def update_price(db: Session, user, price_id: int, payload) -> PriceManageRead:
         verification_status=price.verification_status,
         updated_at=price.updated_at,
         confirmed_count=price.confirmed_count,
+        trust_score=compute_trust_score(db, price, store),
     )
 
 

@@ -1,6 +1,8 @@
 // Appels API : catalogue (produits, boutiques, prix), recherche & comparaison.
 import type {
   Category,
+  PriceConfirmResult,
+  PriceHistoryEntry,
   PriceManage,
   ProductAdmin,
   ProductDetail,
@@ -47,8 +49,18 @@ export async function getStore(storeId: number): Promise<StoreDetail> {
   return data;
 }
 
-export async function confirmPrice(priceId: number): Promise<void> {
-  await api.post(`/prices/${priceId}/confirm`);
+export async function confirmPrice(priceId: number): Promise<PriceConfirmResult> {
+  const { data } = await api.post<PriceConfirmResult>(`/prices/${priceId}/confirm`);
+  return data;
+}
+
+export async function getPriceHistory(
+  priceId: number,
+): Promise<PriceHistoryEntry[]> {
+  const { data } = await api.get<PriceHistoryEntry[]>(
+    `/prices/${priceId}/history`,
+  );
+  return data;
 }
 
 // ---------------- Commençant : gestion de sa boutique ----------------

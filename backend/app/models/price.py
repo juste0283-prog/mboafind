@@ -33,6 +33,14 @@ class Price(Base):
     # Relations
     product: Mapped["Product"] = relationship(back_populates="prices")
     store: Mapped["Store"] = relationship(back_populates="prices")
+    confirmations: Mapped[list["PriceConfirmation"]] = relationship(
+        back_populates="price", cascade="all, delete-orphan"
+    )
+    history: Mapped[list["PriceHistory"]] = relationship(
+        back_populates="price",
+        cascade="all, delete-orphan",
+        order_by="PriceHistory.changed_at.desc()",
+    )
 
     def __repr__(self) -> str:
         return f"<Price id={self.id} amount={self.amount} {self.currency}>"

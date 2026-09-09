@@ -3,6 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getStore } from "../services/catalog";
 import { createReport, createReview } from "../services/reviews";
+import {
+  addFavorite,
+  getFavoriteStatus,
+  removeFavorite,
+} from "../services/favorites";
 import type { StoreDetail as StoreDetailType } from "../types";
 import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../i18n/I18nContext";
@@ -12,6 +17,7 @@ import StoreMap from "../components/map/StoreMap";
 import { fetchRoute, type RouteResult } from "../services/routing";
 import { YAOUNDE_CENTER, isValidPosition } from "../utils/geo";
 import { getApiErrorMessage } from "../utils/apiError";
+import { telLink, whatsappLink } from "../utils/phone";
 import {
   btnPrimary,
   btnSecondary,
@@ -37,6 +43,10 @@ export default function StoreDetail() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Favori
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+
   // Formulaire d'avis
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -60,6 +70,25 @@ export default function StoreDetail() {
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false));
   }, [storeId]);
+
+  // Statut du favori (utilisateur connecte uniquement).
+  useEffect(() => {
+    if (!user) {
+      setIsFavorite(false);
+      return;
+    }
+    let cancelled = false;
+    getFavoriteStatus("STORE", storeId)
+      .then((status) => {
+        if (!cancelled) setIsFavorite(status.is_favorite);
+      })
+      .catch(() => {
+        /* non bloquant */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, storeId]);
 
   const storeCoordinates = () => {
     if (!store || store.latitude == null || store.longitude == null) return null;
@@ -159,6 +188,27 @@ export default function StoreDetail() {
     }
   };
 
+  const handleToggleFavorite = async () => {
+    if (favoriteBusy) return;
+    setFavoriteBusy(true);
+    setError(null);
+    try {
+      if (isFavorite) {
+        await removeFavorite("STORE", store.id);
+        setIsFavorite(false);
+        setNotice(t("favorites.removed"));
+      } else {
+        await addFavorite("STORE", store.id);
+        setIsFavorite(true);
+        setNotice(t("favorites.added"));
+      }
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
+
   const mapsUrl = storePosition
     ? `https://www.google.com/maps/dir/?api=1&destination=${storePosition.lat},${storePosition.lng}`
     : null;
@@ -195,9 +245,46 @@ export default function StoreDetail() {
               <p className={`${muted} mt-3 max-w-2xl text-sm`}>{store.description}</p>
             )}
           </div>
-          <button type="button" onClick={() => setReportOpen(true)} className={btnSecondary}>
-            {t("report.targetStore")}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {(() => {
+              const wa = whatsappLink(store.phone);
+              const tel = telLink(store.phone);
+              return (
+                <>
+                  {wa && (
+                    <a
+                      href={wa}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${btnSecondary} px-3 py-1.5 text-xs`}
+                    >
+                      {t("common.whatsapp")}
+                    </a>
+                  )}
+                  {tel && (
+                    <a href={tel} className={`${btnSecondary} px-3 py-1.5 text-xs`}>
+                      {t("common.call")}
+                    </a>
+                  )}
+                </>
+              );
+            })()}
+            {user && (
+              <button
+                type="button"
+                onClick={handleToggleFavorite}
+                disabled={favoriteBusy}
+                className={`${isFavorite ? btnSecondary : btnPrimary} shrink-0 px-3 py-1.5 text-xs`}
+              >
+                {isFavorite
+                  ? "★ " + t("favorites.remove")
+                  : "☆ " + t("favorites.add")}
+              </button>
+            )}
+            <button type="button" onClick={() => setReportOpen(true)} className={btnSecondary}>
+              {t("report.targetStore")}
+            </button>
+          </div>
         </div>
 
         <dl className="mt-6 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-4 dark:border-slate-700">

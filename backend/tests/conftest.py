@@ -72,6 +72,12 @@ def commerce_headers(client: TestClient) -> dict[str, str]:
 def pro_headers(client: TestClient) -> dict[str, str]:
     """En-têtes JWT d'un professionnel connecté."""
     return _register_and_login(client, "pro@test.com", UserRole.PROFESSIONNEL)
+
+
+@pytest.fixture(scope="session")
+def admin_headers(client: TestClient) -> dict[str, str]:
+    """En-têtes JWT d'un administrateur connecté."""
+    return _register_and_login(client, "admin@test.com", UserRole.ADMIN)
 @pytest.fixture(scope="session")
 def demo_catalog(client: TestClient, commerce_headers):
     """Crée une catégorie, une boutique, un produit, deux prix et une 2e boutique.

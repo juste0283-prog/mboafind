@@ -77,3 +77,10 @@ class ReportStatus(str, enum.Enum):
     PENDING = "PENDING"
     RESOLVED = "RESOLVED"
     DISMISSED = "DISMISSED"
+
+
+class FavoriteItemType(str, enum.Enum):
+    """Type d'objet qu'un utilisateur peut mettre en favori."""
+    PRODUCT = "PRODUCT"
+    STORE = "STORE"
+    PROFESSIONAL = "PROFESSIONAL"

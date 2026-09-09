@@ -6,6 +6,7 @@ import MainLayout from "../layouts/MainLayout";
 import Home from "../pages/Home";
 import Login from "../pages/Login";
 import NotFound from "../pages/NotFound";
+import AdminDashboard from "../pages/AdminDashboard";
 import ProductDetail from "../pages/ProductDetail";
 import ProductSearch from "../pages/ProductSearch";
 import ProfessionalDetail from "../pages/ProfessionalDetail";
@@ -20,6 +21,7 @@ import type { UserRole } from "../types";
 export default function AppRoutes() {
   const merchantRole: UserRole[] = ["COMMERCANT"];
   const proRole: UserRole[] = ["PROFESSIONNEL"];
+  const adminRole: UserRole[] = ["ADMIN"];
 
   return (
     <Routes>
@@ -36,6 +38,7 @@ export default function AppRoutes() {
 
         <Route path="/commercant" element={<RoleRoute roles={merchantRole}><MerchantDashboard /></RoleRoute>} />
         <Route path="/professionnel" element={<RoleRoute roles={proRole}><ProfessionalDashboard /></RoleRoute>} />
+        <Route path="/admin" element={<RoleRoute roles={adminRole}><AdminDashboard /></RoleRoute>} />
 
         <Route
           path="/profil"

@@ -88,3 +88,68 @@ def test_confirm_price(client, auth_headers, demo_catalog):
     assert body["price_id"] == price_id
     assert body["confirmed_count"] >= 1
     assert body["last_confirmed_at"] is not None
+
+
+def test_confirm_price_une_fois_seulement(client, auth_headers, demo_catalog):
+    """Un client ne peut pas confirmer un prix plus d'une fois.
+
+    Une seconde tentative est idempotente : already_confirmed=True et le
+    compteur de confirmations ne bouge pas.
+    """
+    price_id = demo_catalog["price_ids"][1]
+    first = client.post(f"/api/v1/prices/{price_id}/confirm", headers=auth_headers)
+    assert first.status_code == 200
+    assert first.json()["already_confirmed"] is False
+    first_count = first.json()["confirmed_count"]
+
+    second = client.post(f"/api/v1/prices/{price_id}/confirm", headers=auth_headers)
+    assert second.status_code == 200
+    body = second.json()
+    assert body["already_confirmed"] is True
+    assert body["confirmed_count"] == first_count
+    assert body["message"] == "Vous avez deja confirme ce prix."
+
+
+def test_product_detail_confirmed_by_me(client, auth_headers, demo_catalog):
+    """La fiche produit signale les prix deja confirmes par l'utilisateur."""
+    price_id = demo_catalog["price_ids"][0]
+    response = client.post(f"/api/v1/prices/{price_id}/confirm", headers=auth_headers)
+    assert response.status_code == 200
+
+    detail = client.get(
+        f"/api/v1/products/{demo_catalog['product_id']}", headers=auth_headers
+    )
+    assert detail.status_code == 200
+    offers = detail.json()["offers"]
+    confirmed = [o for o in offers if o["confirmed_by_me"]]
+    assert any(o["id"] == price_id for o in confirmed)
+    # Un visiteur anonyme ne voit jamais confirmed_by_me a True.
+    anonymous = client.get(f"/api/v1/products/{demo_catalog['product_id']}")
+    assert all(o["confirmed_by_me"] is False for o in anonymous.json()["offers"])
+
+
+def test_product_detail_trust_score(client, demo_catalog):
+    """Chaque offre expose un score de confiance 0-100."""
+    detail = client.get(f"/api/v1/products/{demo_catalog['product_id']}")
+    body = detail.json()
+    assert 0 <= body["offers"][0]["trust_score"] <= 100
+    # Boutique verifiee + dispo + frais => score haut, pas 0.
+    assert body["offers"][0]["trust_score"] >= 30
+
+
+def test_price_history(client, commerce_headers, demo_catalog):
+    """Chaque modification de prix laisse une trace dans l'historique."""
+    price_id = demo_catalog["price_ids"][0]
+    response = client.patch(
+        f"/api/v1/prices/{price_id}",
+        headers=commerce_headers,
+        json={"amount": 42000.0},
+    )
+    assert response.status_code == 200, response.text
+
+    history = client.get(f"/api/v1/prices/{price_id}/history")
+    assert history.status_code == 200
+    entries = history.json()
+    assert len(entries) >= 1
+    assert entries[0]["amount"] == 38000.0
+    assert entries[0]["currency"] == "XAF"

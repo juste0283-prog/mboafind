@@ -43,6 +43,12 @@ class ReviewRead(BaseModel):
     created_at: datetime
 
 
+class ReviewModerationUpdate(BaseModel):
+    """Decision de moderation d'un avis : approuve, en attente ou rejete."""
+
+    moderation_status: ReviewModerationStatus
+
+
 class ReviewPage(BaseModel):
     """Reponse paginee d'une liste d'avis."""
 

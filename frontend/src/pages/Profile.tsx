@@ -6,7 +6,14 @@ import ErrorMessage from "../components/common/ErrorMessage";
 import { useAuth } from "../hooks/useAuth";
 import { cancelRequest, listMyRequests } from "../services/serviceRequests";
 import { listMyReports, listMyReviews } from "../services/reviews";
-import type { Report, Review, ServiceRequest, UserRole } from "../types";
+import { listFavorites, removeFavorite } from "../services/favorites";
+import type {
+  Favorite,
+  Report,
+  Review,
+  ServiceRequest,
+  UserRole,
+} from "../types";
 import { getApiErrorMessage } from "../utils/apiError";
 import { useI18n } from "../i18n/I18nContext";
 import {
@@ -26,7 +33,10 @@ export default function Profile() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
-  const [tab, setTab] = useState<"requests" | "reviews" | "reports">("requests");
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [tab, setTab] = useState<
+    "requests" | "reviews" | "reports" | "favorites"
+  >("requests");
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -86,14 +96,17 @@ export default function Profile() {
     setLoadingHistory(true);
     setError(null);
     try {
-      const [requestsPage, reviewsList, reportsPage] = await Promise.all([
-        listMyRequests(),
-        listMyReviews(),
-        listMyReports(),
-      ]);
+      const [requestsPage, reviewsList, reportsPage, favoritesList] =
+        await Promise.all([
+          listMyRequests(),
+          listMyReviews(),
+          listMyReports(),
+          listFavorites(),
+        ]);
       setRequests(requestsPage.items);
       setReviews(reviewsList);
       setReports(reportsPage.items);
+      setFavorites(favoritesList);
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -122,6 +135,25 @@ export default function Profile() {
       setError(getApiErrorMessage(err));
     }
   };
+
+  const handleRemoveFavorite = async (favoriteId: number) => {
+    try {
+      const favorite = favorites.find((f) => f.id === favoriteId);
+      if (!favorite) return;
+      await removeFavorite(favorite.item_type, favorite.item_id);
+      setFavorites((prev) => prev.filter((f) => f.id !== favoriteId));
+      setNotice(t("favorites.removed"));
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    }
+  };
+
+  const favoriteLink = (favorite: Favorite): string =>
+    favorite.item_type === "PRODUCT"
+      ? `/produits/${favorite.item_id}`
+      : favorite.item_type === "STORE"
+        ? `/boutiques/${favorite.item_id}`
+        : `/professionnels/${favorite.item_id}`;
 
   const isClient = user.role === "CLIENT";
 
@@ -185,6 +217,7 @@ export default function Profile() {
                 { key: "requests", label: t("profile.tabs.requests") },
                 { key: "reviews", label: t("profile.tabs.reviews") },
                 { key: "reports", label: t("profile.tabs.reports") },
+                { key: "favorites", label: t("favorites.tab") },
               ] as const
             ).map((item) => (
               <button
@@ -270,6 +303,43 @@ export default function Profile() {
                   <p className={`${muted} mt-1 text-xs`}>
                     {t("profile.moderated", { status: review.moderation_status })}
                   </p>
+                </div>
+              ))}
+            </div>
+          ) : tab === "favorites" ? (
+            <div className="mt-4 space-y-3">
+              {favorites.length === 0 && (
+                <p className={`${muted} text-sm`}>{t("favorites.empty")}</p>
+              )}
+              {favorites.map((favorite) => (
+                <div key={favorite.id} className={`${card} p-4`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`${heading} truncate font-semibold`}>
+                        <Link
+                          to={favoriteLink(favorite)}
+                          className="hover:text-brand-green hover:underline"
+                        >
+                          {favorite.item_name ?? favorite.item_type}
+                        </Link>
+                      </p>
+                      <p className={`${muted} text-xs`}>
+                        {favorite.item_type === "PRODUCT"
+                          ? t("favorites.product")
+                          : favorite.item_type === "STORE"
+                            ? t("favorites.store")
+                            : t("favorites.professional")}
+                        {favorite.item_city ? ` · ${favorite.item_city}` : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveFavorite(favorite.id)}
+                      className="text-xs font-medium text-brand-red hover:underline"
+                    >
+                      {t("favorites.remove")}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

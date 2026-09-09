@@ -12,8 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.database.database import init_db
 from app.routers import (
+    admin,
     auth,
     categories,
+    favorites,
     health,
     professional_dashboard,
     professionals,
@@ -67,3 +69,5 @@ app.include_router(professional_dashboard.router, prefix=settings.API_V1_PREFIX)
 app.include_router(service_requests.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reviews.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
+app.include_router(favorites.router, prefix=settings.API_V1_PREFIX)
+app.include_router(admin.router, prefix=settings.API_V1_PREFIX)

@@ -61,6 +61,29 @@ def get_current_active_user(
     return current_user
 
 
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Retourne l'utilisateur courant si un token valide est presente, sinon None.
+
+    Utilise sur les routes publiques (fiche produit, offres) pour prendre en
+    compte l'etat personnel de l'utilisateur (ex. confirmed_by_me) sans exiger
+    d'authentification.
+    """
+    if credentials is None:
+        return None
+    try:
+        payload = get_token_payload(credentials.credentials)
+    except Exception:
+        return None
+    user_id = payload.get("sub")
+    if user_id is None:
+        return None
+    user = db.get(User, int(user_id))
+    return user if user is not None else None
+
+
 def require_roles(*roles: UserRole) -> Callable:
     """Fabrique une dependance exigeant au moins un des roles donnes.."""
 

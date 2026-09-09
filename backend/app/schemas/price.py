@@ -38,6 +38,8 @@ class PriceRead(BaseModel):
     updated_at: datetime
     confirmed_count: int = 0
     last_confirmed_at: datetime | None = None
+    trust_score: int = 0
+    confirmed_by_me: bool = False
 
 
 class PriceManageRead(BaseModel):
@@ -54,6 +56,7 @@ class PriceManageRead(BaseModel):
     verification_status: PriceVerificationStatus
     updated_at: datetime
     confirmed_count: int = 0
+    trust_score: int = 0
 
 
 class PriceConfirmRead(BaseModel):
@@ -61,5 +64,16 @@ class PriceConfirmRead(BaseModel):
 
     price_id: int
     confirmed_count: int
-    last_confirmed_at: datetime
+    last_confirmed_at: datetime | None
     message: str = "Merci ! Votre confirmation aide la communaute."
+    already_confirmed: bool = False
+
+
+class PriceHistoryRead(BaseModel):
+    """Ancienne valeur d'une offre de prix (historique)."""
+
+    id: int
+    amount: float
+    currency: str
+    is_available: bool
+    changed_at: datetime

@@ -31,6 +31,28 @@ class ReportRead(BaseModel):
     created_at: datetime
 
 
+class ReportAdminRead(BaseModel):
+    """Signalement vu par un administrateur (avec nom du reporter)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    reporter_id: int
+    reporter_name: str | None = None
+    target_type: ReportTargetType
+    target_id: int
+    reason: str
+    description: str | None = None
+    status: ReportStatus
+    created_at: datetime
+
+
+class ReportModerationUpdate(BaseModel):
+    """Decision de moderation d'un signalement : resolver ou classer sans suite."""
+
+    status: ReportStatus
+
+
 class ReportPage(BaseModel):
     """Reponse paginee de la liste des signalements d'un utilisateur."""
 

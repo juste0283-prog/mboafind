@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.core.dependencies import get_db, get_optional_user
+from app.models.user import User
 from app.schemas.product import ProductDetail, ProductPage
 from app.services import catalog
 
@@ -49,6 +50,10 @@ def search_products(
 
 
 @router.get("/{product_id}", response_model=ProductDetail, summary="Fiche produit")
-def get_product(product_id: int, db: Session = Depends(get_db)) -> ProductDetail:
+def get_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+) -> ProductDetail:
     """Fiche produit detaillee avec la liste des offres (prix par boutique)."""
-    return catalog.get_product(db, product_id)
+    return catalog.get_product(db, product_id, current_user=current_user)

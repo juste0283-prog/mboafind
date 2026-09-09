@@ -93,6 +93,24 @@ export interface Offer {
   updated_at: string;
   confirmed_count: number;
   last_confirmed_at?: string | null;
+  trust_score: number;
+  confirmed_by_me: boolean;
+}
+
+export interface PriceHistoryEntry {
+  id: number;
+  amount: number;
+  currency: string;
+  is_available: boolean;
+  changed_at: string;
+}
+
+export interface PriceConfirmResult {
+  price_id: number;
+  confirmed_count: number;
+  last_confirmed_at?: string | null;
+  message: string;
+  already_confirmed: boolean;
 }
 
 export interface ProductDetail {
@@ -147,6 +165,7 @@ export interface PriceManage {
   verification_status: "PENDING" | "VERIFIED" | "REJECTED";
   updated_at: string;
   confirmed_count: number;
+  trust_score: number;
 }
 
 export interface ProductAdmin {
@@ -284,6 +303,35 @@ export interface ReportPage {
   total: number;
   page: number;
   page_size: number;
+}
+
+// ---------------- Favoris ----------------
+
+export type FavoriteItemType = "PRODUCT" | "STORE" | "PROFESSIONAL";
+
+export interface Favorite {
+  id: number;
+  item_type: FavoriteItemType;
+  item_id: number;
+  item_name?: string | null;
+  item_city?: string | null;
+  created_at: string;
+}
+
+export interface FavoriteStatus {
+  item_type: FavoriteItemType;
+  item_id: number;
+  is_favorite: boolean;
+}
+
+// ---------------- Modération admin ----------------
+
+export interface ReportAdmin extends Report {
+  reporter_name?: string | null;
+}
+
+export interface ReviewAdmin extends Review {
+  target_label?: string | null;
 }
 
 // ---------------- Profil professionnel (dashboard) ----------------

@@ -86,6 +86,11 @@ export default function MainLayout() {
                 {t("nav.pro")}
               </NavLink>
             )}
+            {user && user.role === "ADMIN" && (
+              <NavLink to="/admin" className={navLinkClass}>
+                {t("nav.admin")}
+              </NavLink>
+            )}
             {user && (
               <NavLink to="/profil" className={navLinkClass}>
                 {t("nav.profile")}

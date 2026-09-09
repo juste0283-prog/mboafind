@@ -1,9 +1,15 @@
-// Fiche produit : offre de prix par boutique (comparaison), confirmation et signalement.
-import { useEffect, useState } from "react";
+// Fiche produit : offre de prix par boutique (comparaison), confirmation one-shot,
+// indice de confiance, historique du prix, favori et signalement.
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getProduct, confirmPrice } from "../services/catalog";
+import { getProduct, confirmPrice, getPriceHistory } from "../services/catalog";
 import { createReport } from "../services/reviews";
-import type { ProductDetail as ProductDetailType } from "../types";
+import { addFavorite, getFavoriteStatus, removeFavorite } from "../services/favorites";
+import type {
+  Offer,
+  PriceHistoryEntry,
+  ProductDetail as ProductDetailType,
+} from "../types";
 import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../i18n/I18nContext";
 import ErrorMessage from "../components/common/ErrorMessage";
@@ -22,6 +28,12 @@ import {
   notice as noticeCls,
 } from "../styles/classes";
 
+function trustColor(score: number): string {
+  if (score >= 70) return "bg-brand-green";
+  if (score >= 40) return "bg-brand-yellow";
+  return "bg-brand-red";
+}
+
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const productId = Number(id);
@@ -31,8 +43,18 @@ export default function ProductDetail() {
   const [product, setProduct] = useState<ProductDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<number | null>(null);
+
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+
+  const [historyOpen, setHistoryOpen] = useState<Set<number>>(new Set());
+  const [histories, setHistories] = useState<Map<number, PriceHistoryEntry[]>>(
+    new Map(),
+  );
+  const [historyLoading, setHistoryLoading] = useState<number | null>(null);
+
   const [reportOpen, setReportOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState<{
     type: string;
@@ -41,14 +63,38 @@ export default function ProductDetail() {
   const [reportReason, setReportReason] = useState("Prix incorrect");
   const [reportDescription, setReportDescription] = useState("");
 
+  const loadProduct = useCallback(async () => {
+    const detail = await getProduct(productId);
+    setProduct(detail);
+    return detail;
+  }, [productId]);
+
   useEffect(() => {
     setLoading(true);
     setError(null);
-    getProduct(productId)
-      .then(setProduct)
+    loadProduct()
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false));
-  }, [productId]);
+  }, [loadProduct]);
+
+  // Statut du favori (uniquement pour un utilisateur connecte).
+  useEffect(() => {
+    if (!user) {
+      setIsFavorite(false);
+      return;
+    }
+    let cancelled = false;
+    getFavoriteStatus("PRODUCT", productId)
+      .then((status) => {
+        if (!cancelled) setIsFavorite(status.is_favorite);
+      })
+      .catch(() => {
+        /* non bloquant */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, productId]);
 
   if (loading) {
     return <Spinner fullScreen />;
@@ -65,19 +111,81 @@ export default function ProductDetail() {
     );
   }
 
-  const handleConfirm = async (priceId: number) => {
-    setConfirming(priceId);
+  const handleConfirm = async (offer: Offer) => {
+    setConfirming(offer.id);
     setNotice(null);
     try {
-      await confirmPrice(priceId);
-      const updated = await getProduct(productId);
-      setProduct(updated);
-      setNotice(t("product.priceConfirmed"));
+      const result = await confirmPrice(offer.id);
+      await loadProduct();
+      setNotice(
+        result.already_confirmed ? result.message : t("product.priceConfirmed"),
+      );
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
       setConfirming(null);
     }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (favoriteBusy) return;
+    setFavoriteBusy(true);
+    setError(null);
+    try {
+      if (isFavorite) {
+        await removeFavorite("PRODUCT", productId);
+        setIsFavorite(false);
+        setNotice(t("product.favoriteRemoved"));
+      } else {
+        await addFavorite("PRODUCT", productId);
+        setIsFavorite(true);
+        setNotice(t("product.favoriteAdded"));
+      }
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
+
+  const handleToggleHistory = async (offerId: number) => {
+    if (historyOpen.has(offerId)) {
+      const next = new Set(historyOpen);
+      next.delete(offerId);
+      setHistoryOpen(next);
+      return;
+    }
+    if (!histories.has(offerId)) {
+      setHistoryLoading(offerId);
+      try {
+        const entries = await getPriceHistory(offerId);
+        setHistories((prev) => {
+          const next = new Map(prev);
+          next.set(offerId, entries);
+          return next;
+        });
+      } catch (err) {
+        setError(getApiErrorMessage(err));
+      } finally {
+        setHistoryLoading(null);
+      }
+    }
+    setHistoryOpen((prev) => {
+      const next = new Set(prev);
+      next.add(offerId);
+      return next;
+    });
+  };
+
+  const formatDateTime = (value: string): string => {
+    const date = new Date(value);
+    return new Intl.DateTimeFormat("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
   };
 
   const handleReport = async () => {
@@ -109,7 +217,11 @@ export default function ProductDetail() {
           {notice}
         </div>
       )}
-      {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
+      {error && (
+        <div className="mt-4">
+          <ErrorMessage message={error} />
+        </div>
+      )}
 
       <div className={`${card} mt-4 p-6`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -129,6 +241,16 @@ export default function ProductDetail() {
               <p className={`${muted} mt-3 text-sm`}>{product.description}</p>
             )}
           </div>
+          {user && (
+            <button
+              type="button"
+              onClick={handleToggleFavorite}
+              disabled={favoriteBusy}
+              className={`${isFavorite ? btnSecondary : btnPrimary} shrink-0`}
+            >
+              {isFavorite ? "★ " + t("product.favoriteRemove") : "☆ " + t("product.favoriteAdd")}
+            </button>
+          )}
         </div>
 
         {product.min_price !== null && product.min_price !== undefined ? (
@@ -172,9 +294,17 @@ export default function ProductDetail() {
         )}
       </div>
 
-      <h2 className={`${heading} mt-8 text-lg`}>
-        {t("product.compare")} ({product.offers.length})
-      </h2>
+      <div className="mt-6 flex items-center justify-between">
+        <h2 className={`${heading} text-lg`}>
+          {t("product.compare")} ({product.offers.length})
+        </h2>
+        <span
+          className="text-xs text-slate-400 underline decoration-dotted hover:text-slate-600 dark:hover:text-slate-300"
+          title={t("product.trustHelp")}
+        >
+          {t("product.trust")}
+        </span>
+      </div>
       <div className={`${card} mt-3 overflow-hidden`}>
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
@@ -182,71 +312,31 @@ export default function ProductDetail() {
               <th className="px-4 py-3">{t("merchant.productCol")}</th>
               <th className="px-4 py-3">{t("merchant.priceCol")}</th>
               <th className="px-4 py-3">{t("merchant.availableCol")}</th>
-              <th className="px-4 py-3">Confiance</th>
+              <th className="px-4 py-3">{t("product.trust")}</th>
               <th className="px-4 py-3 text-right">{t("merchant.actionsCol")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
             {product.offers.map((offer) => (
-              <tr key={offer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td className="px-4 py-3">
-                  <Link
-                    to={`/boutiques/${offer.store_id}`}
-                    className="font-medium text-slate-900 hover:text-brand-green hover:underline dark:text-slate-100"
-                  >
-                    {offer.store_name}
-                  </Link>
-                  {offer.store_is_verified && (
-                    <span className={`${badge.green} ml-2`}>{t("store.verified")}</span>
-                  )}
-                  {offer.store_city && (
-                    <p className={`${muted} text-xs`}>{offer.store_city}</p>
-                  )}
-                </td>
-                <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                  {formatNumber(offer.amount)} FCFA
-                </td>
-                <td className="px-4 py-3">
-                  {offer.is_available ? (
-                    <span className={badge.green}>{t("product.available")}</span>
-                  ) : (
-                    <span className={badge.red}>{t("product.unavailable")}</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-                  {offer.verification_status === "VERIFIED" ? (
-                    <span className="text-brand-green">{t("product.verified", { count: offer.confirmed_count })}</span>
-                  ) : offer.confirmed_count > 0 ? (
-                    <span>{t("product.verified", { count: offer.confirmed_count })}</span>
-                  ) : (
-                    <span className="text-slate-400">{t("product.confirmPrice")}</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-2">
-                    {user && (
-                      <button
-                        type="button"
-                        disabled={confirming === offer.id}
-                        onClick={() => handleConfirm(offer.id)}
-                        className={`${btnPrimary} px-3 py-1.5 text-xs`}
-                      >
-                        {confirming === offer.id ? "…" : t("product.confirmPrice")}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setReportTarget({ type: "PRICE", id: offer.id });
-                        setReportOpen(true);
-                      }}
-                      className={`${btnSecondary} px-3 py-1.5 text-xs`}
-                    >
-                      {t("report.targetProduct")}
-                    </button>
-                  </div>
-                </td>
-              </tr>
+              <ProductOfferRows
+                key={offer.id}
+                offer={offer}
+                productName={product.name}
+                confirming={confirming === offer.id}
+                user={user ?? null}
+                historyOpen={historyOpen.has(offer.id)}
+                history={histories.get(offer.id) ?? null}
+                historyLoading={historyLoading === offer.id}
+                formatNumber={formatNumber}
+                formatDateTime={formatDateTime}
+                onConfirm={() => handleConfirm(offer)}
+                onToggleHistory={() => handleToggleHistory(offer.id)}
+                onReport={() => {
+                  setReportTarget({ type: "PRICE", id: offer.id });
+                  setReportOpen(true);
+                }}
+                t={t}
+              />
             ))}
           </tbody>
         </table>
@@ -282,9 +372,7 @@ export default function ProductDetail() {
               </select>
             </label>
             <label className="mt-3 block">
-              <span className={label}>
-                {t("report.details")}
-              </span>
+              <span className={label}>{t("report.details")}</span>
               <textarea
                 value={reportDescription}
                 onChange={(event) => setReportDescription(event.target.value)}
@@ -304,5 +392,153 @@ export default function ProductDetail() {
         </div>
       )}
     </div>
+  );
+}
+
+interface OfferRowProps {
+  offer: Offer;
+  productName: string;
+  confirming: boolean;
+  user: { role: string } | null;
+  historyOpen: boolean;
+  history: PriceHistoryEntry[] | null;
+  historyLoading: boolean;
+  formatNumber: (value: number) => string;
+  formatDateTime: (value: string) => string;
+  onConfirm: () => void;
+  onToggleHistory: () => void;
+  onReport: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  t: (key: string, params?: Record<string, string | number>) => string;
+}
+
+function ProductOfferRows({
+  offer,
+  confirming,
+  user,
+  historyOpen,
+  history,
+  historyLoading,
+  formatNumber,
+  formatDateTime,
+  onConfirm,
+  onToggleHistory,
+  onReport,
+  t,
+}: OfferRowProps) {
+  const confirmedByMe = offer.confirmed_by_me;
+  const confirmedLabel = confirmedByMe
+    ? t("product.confirmedByMe")
+    : t("product.alreadyConfirmed");
+
+  return (
+    <>
+      <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+        <td className="px-4 py-3">
+          <Link
+            to={`/boutiques/${offer.store_id}`}
+            className="font-medium text-slate-900 hover:text-brand-green hover:underline dark:text-slate-100"
+          >
+            {offer.store_name}
+          </Link>
+          {offer.store_is_verified && (
+            <span className={`${badge.green} ml-2`}>{t("store.verified")}</span>
+          )}
+          {offer.store_city && <p className={`${muted} text-xs`}>{offer.store_city}</p>}
+        </td>
+        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
+          {formatNumber(offer.amount)} FCFA
+        </td>
+        <td className="px-4 py-3">
+          {offer.is_available ? (
+            <span className={badge.green}>{t("product.available")}</span>
+          ) : (
+            <span className={badge.red}>{t("product.unavailable")}</span>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          <div className="min-w-[120px]">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+              <div
+                className={`h-2 rounded-full ${trustColor(offer.trust_score)}`}
+                style={{ width: `${Math.max(0, Math.min(100, offer.trust_score))}%` }}
+              />
+            </div>
+            <p className={`${muted} mt-1 text-xs`}>{offer.trust_score} / 100</p>
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex items-center justify-end gap-2">
+            {!user && (
+              <span className="text-xs text-slate-400">{t("product.verified", { count: offer.confirmed_count })}</span>
+            )}
+            {user && (
+              <button
+                type="button"
+                disabled={confirming || confirmedByMe}
+                onClick={onConfirm}
+                title={confirmedByMe ? confirmedLabel : undefined}
+                className={`${confirmedByMe ? btnSecondary : btnPrimary} px-3 py-1.5 text-xs`}
+              >
+                {confirming
+                  ? "…"
+                  : confirmedByMe
+                    ? confirmedLabel
+                    : t("product.confirmPrice")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onToggleHistory}
+              className={`${btnSecondary} px-3 py-1.5 text-xs`}
+            >
+              {historyLoading ? "…" : t("product.historyToggle")}
+            </button>
+            <button
+              type="button"
+              onClick={onReport}
+              className={`${btnSecondary} px-3 py-1.5 text-xs`}
+            >
+              {t("report.targetProduct")}
+            </button>
+          </div>
+        </td>
+      </tr>
+      {historyOpen && (
+        <tr>
+          <td colSpan={5} className="bg-slate-50/60 px-4 py-3 dark:bg-slate-800/40">
+            <p className={`${heading} mb-2 text-xs uppercase tracking-wide`}>
+              {t("product.priceHistory")}
+            </p>
+            {history === null ? (
+              <p className={`${muted} text-sm`}>…</p>
+            ) : history.length === 0 ? (
+              <p className={`${muted} text-sm`}>{t("product.historyEmpty")}</p>
+            ) : (
+              <ul className="space-y-1">
+                {history.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                  >
+                    <span className={`${muted} text-xs`}>
+                      {t("product.historyChanged", {
+                        date: formatDateTime(entry.changed_at),
+                      })}
+                    </span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {formatNumber(entry.amount)} FCFA
+                      {!entry.is_available && (
+                        <span className={`${badge.red} ml-2`}>{t("product.unavailable")}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
