@@ -5,18 +5,11 @@ import { searchProfessionals } from "../services/professionals";
 import type { ProfessionalListItem } from "../types";
 import ErrorMessage from "../components/common/ErrorMessage";
 import { getApiErrorMessage } from "../utils/apiError";
-
-const SORTS = [
-  { value: "relevance", label: "Pertinence" },
-  { value: "rating", label: "Meilleure note" },
-  { value: "price_asc", label: "Tarif croissant" },
-  { value: "price_desc", label: "Tarif décroissant" },
-];
-
-const inputClass =
-  "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30";
+import { useI18n } from "../i18n/I18nContext";
+import { heading, muted, input, btnPrimary, btnSecondary } from "../styles/classes";
 
 export default function ProfessionalSearch() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get("q") ?? "";
   const city = searchParams.get("city") ?? "";
@@ -32,6 +25,13 @@ export default function ProfessionalSearch() {
   const [selectedSort, setSelectedSort] = useState("relevance");
 
   const pageSize = 20;
+
+  const sortOptions = [
+    { value: "relevance", label: t("search.sortRelevance") },
+    { value: "rating", label: t("pro.results") },
+    { value: "price_asc", label: t("search.sortPriceAsc") },
+    { value: "price_desc", label: t("search.sortPriceDesc") },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -72,83 +72,84 @@ export default function ProfessionalSearch() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Trouver un professionnel</h1>
-      <p className="mt-1 text-sm text-gray-600">
-        Mécanicien, maçon, informaticien… envoyez une demande de service en quelques clics.
-      </p>
+      <h1 className={`${heading} text-2xl`}>{t("pro.title")}</h1>
+      <p className={`${muted} mt-1 text-sm`}>{t("pro.subtitle")}</p>
 
       <form onSubmit={handleSearch} className="mt-6 flex flex-col gap-3 sm:flex-row">
         <input
           type="search"
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          placeholder="Ex : réparateur de téléphone, électricien…"
-          className={`${inputClass} flex-1`}
+          placeholder={t("pro.searchPlaceholder")}
+          className={`${input} flex-1`}
         />
         <input
           type="text"
           value={selectedCity}
           onChange={(event) => setSelectedCity(event.target.value)}
-          placeholder="Ville (ex : Yaoundé)"
-          className={`${inputClass} sm:w-56`}
+          placeholder={t("merchant.storeCityField")}
+          className={`${input} sm:w-56`}
         />
         <select
           value={selectedSort}
           onChange={(event) => setSelectedSort(event.target.value)}
-          className={`${inputClass} sm:w-48`}
+          className={`${input} sm:w-48`}
         >
-          {SORTS.map((s) => (
+          {sortOptions.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}
         </select>
-        <button
-          type="submit"
-          className="rounded-md bg-brand-green px-6 py-2 font-semibold text-white hover:brightness-110"
-        >
-          Rechercher
+        <button type="submit" className={`${btnPrimary} px-6`}>
+          {t("common.search")}
         </button>
       </form>
 
       {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
 
       {loading ? (
-        <p className="mt-8 text-center text-gray-500">Recherche en cours…</p>
+        <p className={`${muted} mt-8 text-center`}>{t("common.loading")}</p>
       ) : items.length === 0 ? (
-        <p className="mt-8 text-center text-gray-500">
-          Aucun professionnel trouvé. Essayez un autre mot-clé.
-        </p>
+        <div className="mt-10 text-center">
+          <p className="text-4xl">🛠️</p>
+          <p className={`${muted} mt-3`}>{t("pro.noResults")}</p>
+        </div>
       ) : (
         <>
-          <p className="mt-6 text-sm text-gray-600">{total} professionnel(s)</p>
+          <p className={`${muted} mt-6 text-sm`}>{t("pro.results", { count: total })}</p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((pro) => (
               <Link
                 key={pro.id}
                 to={`/professionnels/${pro.id}`}
-                className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+                className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800/60"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-gray-900">{pro.profession}</h3>
+                  <h3 className={`${heading} font-semibold`}>{pro.profession}</h3>
                   {pro.is_verified && (
-                    <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                      Vérifié
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                      {t("store.verified")}
                     </span>
                   )}
                 </div>
-                {pro.user_name && <p className="mt-1 text-sm text-gray-500">{pro.user_name}</p>}
-                {pro.city && <p className="mt-1 text-xs text-gray-400">📍 {pro.city}</p>}
-                {pro.bio && (
-                  <p className="mt-2 line-clamp-2 text-sm text-gray-600">{pro.bio}</p>
+                {pro.user_name && <p className={`${muted} mt-1 text-sm`}>{pro.user_name}</p>}
+                {pro.city && (
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">📍 {pro.city}</p>
                 )}
-                <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                {pro.bio && (
+                  <p className={`${muted} mt-2 line-clamp-2 text-sm`}>{pro.bio}</p>
+                )}
+                <div className={`${muted} mt-3 flex items-center justify-between text-xs`}>
                   <span>
                     {pro.rating_count > 0
-                      ? `★ ${pro.rating_avg?.toFixed(1)} (${pro.rating_count} avis)`
-                      : "Aucun avis"}
+                      ? t("pro.ratingValue", {
+                          value: pro.rating_avg?.toFixed(1) ?? "0",
+                          count: pro.rating_count,
+                        })
+                      : t("pro.ratingNone")}
                   </span>
-                  <span>{pro.services_count} service(s)</span>
+                  <span>{t("pro.services", { count: pro.services_count })}</span>
                 </div>
               </Link>
             ))}
@@ -160,20 +161,20 @@ export default function ProfessionalSearch() {
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`${btnSecondary} disabled:cursor-not-allowed disabled:opacity-50`}
               >
-                ← Précédent
+                {t("search.pagePrev")}
               </button>
-              <span className="text-sm text-gray-600">
-                Page {page} / {Math.max(1, Math.ceil(total / pageSize))}
+              <span className={`${muted} text-sm`}>
+                {t("search.pageInfo", { page, pages: Math.max(1, Math.ceil(total / pageSize)) })}
               </span>
               <button
                 type="button"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page >= Math.ceil(total / pageSize)}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`${btnSecondary} disabled:cursor-not-allowed disabled:opacity-50`}
               >
-                Suivant →
+                {t("search.pageNext")}
               </button>
             </div>
           )}

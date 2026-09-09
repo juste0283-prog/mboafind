@@ -1,28 +1,36 @@
-// Fiche boutique : informations, produits vendus, avis et signalement.
-import { useEffect, useState } from "react";
+// Fiche boutique : informations, carte, itinéraire, produits, avis et signalement.
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getStore } from "../services/catalog";
 import { createReport, createReview } from "../services/reviews";
 import type { StoreDetail as StoreDetailType } from "../types";
-import { FORMAT } from "../types";
 import { useAuth } from "../hooks/useAuth";
+import { useI18n } from "../i18n/I18nContext";
 import ErrorMessage from "../components/common/ErrorMessage";
 import Spinner from "../components/common/Spinner";
+import StoreMap from "../components/map/StoreMap";
+import { fetchRoute, type RouteResult } from "../services/routing";
+import { YAOUNDE_CENTER, isValidPosition } from "../utils/geo";
 import { getApiErrorMessage } from "../utils/apiError";
-
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
+import {
+  btnPrimary,
+  btnSecondary,
+  btnDanger,
+  card,
+  cardHover,
+  input,
+  label,
+  muted,
+  heading,
+  badge,
+  notice as noticeCls,
+} from "../styles/classes";
 
 export default function StoreDetail() {
   const { id } = useParams<{ id: string }>();
   const storeId = Number(id);
   const { user } = useAuth();
+  const { t, formatNumber, formatDate } = useI18n();
 
   const [store, setStore] = useState<StoreDetailType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,8 +44,13 @@ export default function StoreDetail() {
 
   // Signalement
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("Boutique fermée");
+  const [reportReason, setReportReason] = useState("Localisation incorrecte");
   const [reportDescription, setReportDescription] = useState("");
+
+  // Carte & itinéraire
+  const [origin, setOrigin] = useState<{ lat: number; lng: number } | null>(null);
+  const [route, setRoute] = useState<RouteResult | null>(null);
+  const [routing, setRouting] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -48,6 +61,55 @@ export default function StoreDetail() {
       .finally(() => setLoading(false));
   }, [storeId]);
 
+  const storeCoordinates = () => {
+    if (!store || store.latitude == null || store.longitude == null) return null;
+    const pos = { lat: store.latitude, lng: store.longitude };
+    return isValidPosition(pos) ? pos : null;
+  };
+
+  const computeRoute = useCallback(
+    async (from: { lat: number; lng: number }) => {
+      const destination = storeCoordinates();
+      if (!destination) {
+        setRoute(null);
+        return;
+      }
+      setRouting(true);
+      setError(null);
+      setOrigin(from);
+      try {
+        const result = await fetchRoute(from, destination);
+        setRoute(result);
+      } catch (err) {
+        setError(getApiErrorMessage(err));
+      } finally {
+        setRouting(false);
+      }
+    },
+    [store],
+  );
+
+  const routeFromMyLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      void computeRoute(YAOUNDE_CENTER);
+      return;
+    }
+    setRouting(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        void computeRoute({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => {
+        setRouting(false);
+        void computeRoute(YAOUNDE_CENTER);
+      },
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  }, [computeRoute]);
+
   if (loading) {
     return <Spinner fullScreen />;
   }
@@ -55,20 +117,22 @@ export default function StoreDetail() {
   if (error || !store) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <ErrorMessage message={error ?? "Boutique introuvable."} />
-        <Link to="/recherche" className="mt-4 inline-block text-brand-green hover:underline">
-          ← Retour à la recherche
+        <ErrorMessage message={error ?? t("store.notFound")} />
+        <Link to="/recherche" className={`${btnSecondary} mt-4`}>
+          {t("product.backToSearch")}
         </Link>
       </div>
     );
   }
+
+  const storePosition = storeCoordinates();
 
   const handleReview = async () => {
     setSubmitting(true);
     setError(null);
     try {
       await createReview({ store_id: store.id, rating, comment: comment.trim() || undefined });
-      setNotice("Avis envoyé. Merci pour votre contribution !");
+      setNotice(t("store.reviewSent"));
       setComment("");
       const fresh = await getStore(storeId);
       setStore(fresh);
@@ -89,142 +153,204 @@ export default function StoreDetail() {
       });
       setReportOpen(false);
       setReportDescription("");
-      setNotice("Signalement envoyé. Merci d'avoir aidé la communauté !");
+      setNotice(t("report.sent"));
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
   };
 
+  const mapsUrl = storePosition
+    ? `https://www.google.com/maps/dir/?api=1&destination=${storePosition.lat},${storePosition.lng}`
+    : null;
+
+  const mapMarkers = [
+    ...(storePosition ? [{ lat: storePosition.lat, lng: storePosition.lng, label: store.name, verified: store.is_verified }] : []),
+    ...(origin ? [{ ...origin, label: "A", isOrigin: true }] : []),
+  ];
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <Link to="/recherche" className="text-sm text-brand-green hover:underline">
-        ← Recherche
+        {t("product.backToSearch")}
       </Link>
 
       {notice && (
-        <div
-          className="mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-          role="status"
-        >
+        <div className={`${noticeCls.success} mt-4`} role="status">
           {notice}
         </div>
       )}
       {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
 
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className={`${card} mt-4 p-6`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
+            <h1 className={`${heading} flex items-center gap-2 text-2xl`}>
               {store.name}
               {store.is_verified && (
-                <span
-                  className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
-                  title="Boutique vérifiée par l'équipe MboaFind"
-                >
-                  Vérifié
-                </span>
+                <span className={badge.green}>{t("store.verified")}</span>
               )}
             </h1>
-            {store.city && <p className="mt-1 text-sm text-gray-500">{store.city}</p>}
+            {store.city && <p className={`${muted} mt-1 text-sm`}>{store.city}</p>}
             {store.description && (
-              <p className="mt-3 max-w-2xl text-sm text-gray-600">{store.description}</p>
+              <p className={`${muted} mt-3 max-w-2xl text-sm`}>{store.description}</p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setReportOpen(true)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-          >
-            Signaler cette boutique
+          <button type="button" onClick={() => setReportOpen(true)} className={btnSecondary}>
+            {t("report.targetStore")}
           </button>
         </div>
 
-        <dl className="mt-6 grid gap-3 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+        <dl className="mt-6 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-4 dark:border-slate-700">
           <div>
-            <dt className="text-xs font-medium text-gray-500">Adresse</dt>
-            <dd className="mt-0.5 text-sm text-gray-900">{store.address ?? "Non renseignée"}</dd>
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{t("store.address")}</dt>
+            <dd className="mt-0.5 text-sm text-slate-900 dark:text-slate-100">
+              {store.address ?? t("store.locationMissing")}
+            </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium text-gray-500">Téléphone</dt>
-            <dd className="mt-0.5 text-sm text-gray-900">{store.phone ?? "—"}</dd>
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{t("store.phone")}</dt>
+            <dd className="mt-0.5 text-sm text-slate-900 dark:text-slate-100">
+              {store.phone ?? t("store.noPhone")}
+            </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium text-gray-500">Horaires</dt>
-            <dd className="mt-0.5 text-sm text-gray-900">{store.opening_hours ?? "—"}</dd>
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{t("store.hours")}</dt>
+            <dd className="mt-0.5 text-sm text-slate-900 dark:text-slate-100">
+              {store.opening_hours ?? "—"}
+            </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium text-gray-500">Note moyenne</dt>
-            <dd className="mt-0.5 text-sm text-gray-900">
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{t("store.rating")}</dt>
+            <dd className="mt-0.5 text-sm text-slate-900 dark:text-slate-100">
               {store.rating_avg !== null && store.rating_avg !== undefined
-                ? `★ ${store.rating_avg.toFixed(1)} (${store.rating_count} avis)`
-                : "Aucun avis"}
+                ? t("store.ratingValue", {
+                    value: store.rating_avg.toFixed(1),
+                    count: store.rating_count,
+                  })
+                : t("store.noRating")}
             </dd>
           </div>
         </dl>
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold text-gray-900">
-        Produits disponibles ({store.products.length})
+      {/* ---- Carte & itinéraire ---- */}
+      <h2 className={`${heading} mt-8 text-lg`}>{t("store.map")}</h2>
+      <div className={`${card} mt-3 p-5`}>
+        {storePosition ? (
+          <>
+            <StoreMap
+              center={origin ?? storePosition}
+              markers={mapMarkers}
+              route={route?.coordinates}
+            />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={routeFromMyLocation} className={btnPrimary}>
+                  {routing ? t("store.calculating") : t("store.calculateRoute")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void computeRoute(YAOUNDE_CENTER)}
+                  className={btnSecondary}
+                >
+                  {t("store.itineraryFromCity")}
+                </button>
+                {mapsUrl && (
+                  <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={btnSecondary}>
+                    {t("store.openInMap")}
+                  </a>
+                )}
+              </div>
+              {route && (
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="font-semibold text-brand-green">
+                    {t("store.distance")} : {formatNumber(route.distanceKm)} km
+                  </span>
+                  <span className={`font-semibold ${muted}`}>
+                    {t("store.duration")} : {formatNumber(route.durationMin)} min
+                  </span>
+                  {route.geometry === "straight" && (
+                    <span className={`${muted} text-xs`}>ⓘ</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className={`${muted} text-sm`}>{t("store.noLocation")}</p>
+        )}
+      </div>
+
+      <h2 className={`${heading} mt-8 text-lg`}>
+        {t("store.products")} ({store.products.length})
       </h2>
       <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {store.products.length === 0 && (
-          <p className="text-sm text-gray-500">Aucun produit enregistré pour le moment.</p>
+          <p className={`${muted} text-sm`}>{t("store.noProducts")}</p>
         )}
         {store.products.map((product) => (
           <Link
             key={product.id}
             to={`/produits/${product.id}`}
-            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+            className={cardHover}
           >
-            <p className="font-semibold text-gray-900">{product.name}</p>
-            {product.brand && <p className="text-sm text-gray-500">{product.brand}</p>}
-            <p className="mt-2 font-bold text-brand-green">
-              {product.min_price !== null && product.min_price !== undefined
-                ? `${FORMAT.format(product.min_price)} FCFA`
-                : "Prix non publié"}
-            </p>
+            <div className="p-4">
+              <p className={`${heading} font-semibold`}>{product.name}</p>
+              {product.brand && <p className={`${muted} text-sm`}>{product.brand}</p>}
+              <p className="mt-2 font-bold text-brand-green">
+                {product.min_price !== null && product.min_price !== undefined
+                  ? `${formatNumber(product.min_price)} FCFA`
+                  : t("merchant.noPrice")}
+              </p>
+            </div>
           </Link>
         ))}
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold text-gray-900">
-        Avis clients ({store.reviews.length})
+      <h2 className={`${heading} mt-8 text-lg`}>
+        {t("store.reviews")} ({store.reviews.length})
       </h2>
       <div className="mt-3 space-y-3">
         {store.reviews.length === 0 && (
-          <p className="text-sm text-gray-500">Aucun avis publié pour le moment.</p>
+          <p className={`${muted} text-sm`}>{t("store.noReviews")}</p>
         )}
         {store.reviews.map((review) => (
-          <div key={review.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-gray-900">
-                {"★".repeat(review.rating)}
-                <span className="text-gray-300">{"★".repeat(5 - review.rating)}</span>
-                <span className="ml-2 font-normal text-gray-500">
-                  {review.author_name ?? "Utilisateur"}
+          <div key={review.id} className={card}>
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <p className={`${heading} text-sm font-semibold`}>
+                  {"★".repeat(review.rating)}
+                  <span className="text-slate-300 dark:text-slate-600">
+                    {"★".repeat(5 - review.rating)}
+                  </span>
+                  <span className={`${muted} ml-2 font-normal`}>
+                    {review.author_name ?? t("store.author")}
+                  </span>
+                </p>
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  {formatDate(review.created_at)}
                 </span>
-              </p>
-              <span className="text-xs text-gray-400">{formatDate(review.created_at)}</span>
+              </div>
+              {review.comment && (
+                <p className={`${muted} mt-2 text-sm`}>{review.comment}</p>
+              )}
             </div>
-            {review.comment && <p className="mt-2 text-sm text-gray-600">{review.comment}</p>}
           </div>
         ))}
       </div>
 
       {user && (
-        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-gray-900">Laisser un avis</h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Partagez votre expérience avec cette boutique (éligible après une visite).
-          </p>
+        <div className={`${card} mt-8 p-6`}>
+          <h3 className={`${heading} text-base`}>{t("store.leaveReview")}</h3>
+          <p className={`${muted} mt-1 text-sm`}>{t("store.reviewHint")}</p>
           <div className="mt-4 flex items-center gap-2">
             {[1, 2, 3, 4, 5].map((value) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => setRating(value)}
-                className={`text-2xl ${value <= rating ? "text-brand-yellow" : "text-gray-300"}`}
-                aria-label={`${value} étoiles`}
+                className={`text-2xl ${value <= rating ? "text-brand-yellow" : "text-slate-300 dark:text-slate-600"}`}
+                aria-label={t("store.stars", { value })}
               >
                 ★
               </button>
@@ -234,69 +360,64 @@ export default function StoreDetail() {
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             rows={3}
-            placeholder="Votre commentaire…"
-            className="mt-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+            placeholder={t("store.reviewPlaceholder")}
+            className={`${input} mt-3`}
           />
           <button
             type="button"
             disabled={submitting}
             onClick={handleReview}
-            className="mt-3 rounded-md bg-brand-green px-5 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
+            className={`${btnPrimary} mt-3`}
           >
-            {submitting ? "Envoi…" : "Publier mon avis"}
+            {submitting ? t("common.loading") : t("store.publishReview")}
           </button>
         </div>
       )}
 
       {reportOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={() => setReportOpen(false)}
         >
-          <div
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-gray-900">Signaler « {store.name} »</h3>
+          <div className={`${card} w-full max-w-md p-6 shadow-xl`} onClick={(event) => event.stopPropagation()}>
+            <h3 className={`${heading} text-lg`}>
+              {t("product.reportTitle", { name: store.name })}
+            </h3>
             <label className="mt-4 block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Motif</span>
+              <span className={label}>{t("report.reason")}</span>
               <select
                 value={reportReason}
                 onChange={(event) => setReportReason(event.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+                className={input}
               >
-                {["Boutique fermée", "Information incorrecte", "Localisation incorrecte", "Contenu abusif", "Autre"].map(
-                  (reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ),
-                )}
+                {[
+                  t("report.store"),
+                  t("report.storeInfo"),
+                  t("report.location"),
+                  t("report.abusive"),
+                  t("common.other"),
+                ].map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="mt-3 block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Détails (optionnel)</span>
+              <span className={label}>{t("report.details")}</span>
               <textarea
                 value={reportDescription}
                 onChange={(event) => setReportDescription(event.target.value)}
                 rows={3}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+                className={input}
               />
             </label>
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setReportOpen(false)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Annuler
+              <button type="button" onClick={() => setReportOpen(false)} className={btnSecondary}>
+                {t("common.cancel")}
               </button>
-              <button
-                type="button"
-                onClick={handleReport}
-                className="rounded-md bg-brand-red px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
-              >
-                Envoyer le signalement
+              <button type="button" onClick={handleReport} className={btnDanger}>
+                {t("report.send")}
               </button>
             </div>
           </div>

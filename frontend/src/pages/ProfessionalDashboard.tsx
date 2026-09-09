@@ -14,24 +14,24 @@ import {
   startRequest,
 } from "../services/serviceRequests";
 import type { ProfessionalProfile, Service, ServiceRequest } from "../types";
-import { FORMAT } from "../types";
 import ErrorMessage from "../components/common/ErrorMessage";
 import Spinner from "../components/common/Spinner";
 import { getApiErrorMessage } from "../utils/apiError";
-
-const inputClass =
-  "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30";
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: "Créée",
-  ACCEPTED: "Acceptée",
-  DECLINED: "Refusée",
-  IN_PROGRESS: "En cours",
-  COMPLETED: "Terminée",
-  CANCELLED: "Annulée",
-};
+import { useI18n } from "../i18n/I18nContext";
+import {
+  btnPrimary,
+  btnDanger,
+  card,
+  input,
+  label,
+  muted,
+  heading,
+  notice as noticeCls,
+  badge,
+} from "../styles/classes";
 
 export default function ProfessionalDashboard() {
+  const { t, formatNumber, formatDate } = useI18n();
   const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +48,34 @@ export default function ProfessionalDashboard() {
   const [serviceName, setServiceName] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [serviceSubmitting, setServiceSubmitting] = useState(false);
+
+  const statusLabel = (status: ServiceRequest["status"]): string => {
+    const labels: Record<string, string> = {
+      PENDING: t("prow.pending"),
+      ACCEPTED: t("prow.accepted"),
+      DECLINED: t("prow.declined"),
+      IN_PROGRESS: t("prow.inProgress"),
+      COMPLETED: t("prow.completed"),
+      CANCELLED: t("prow.cancelled"),
+    };
+    return labels[status] ?? status;
+  };
+
+  const statusClass = (status: ServiceRequest["status"]): string => {
+    switch (status) {
+      case "COMPLETED":
+        return badge.green;
+      case "DECLINED":
+      case "CANCELLED":
+        return badge.red;
+      case "IN_PROGRESS":
+        return "inline-flex rounded-full bg-brand-yellow/30 px-2 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-200";
+      case "ACCEPTED":
+        return "inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+      default:
+        return "inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+    }
+  };
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -87,7 +115,7 @@ export default function ProfessionalDashboard() {
       setProfession(updated.profession);
       setBio(updated.bio ?? "");
       setCity(updated.city ?? "");
-      setNotice("Profil enregistré.");
+      setNotice(t("prow.profileSaved"));
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -104,7 +132,7 @@ export default function ProfessionalDashboard() {
         name: serviceName,
         price: servicePrice ? Number(servicePrice) : undefined,
       });
-      setNotice("Service ajouté.");
+      setNotice(t("prow.serviceSaved"));
       setServiceName("");
       setServicePrice("");
       const fresh = await getProfessionalProfile();
@@ -117,12 +145,12 @@ export default function ProfessionalDashboard() {
   };
 
   const handleDeleteService = async (service: Service) => {
-    if (!window.confirm(`Supprimer le service « ${service.name} » ?`)) return;
+    if (!window.confirm(t("prow.deleteServiceConfirm", { name: service.name }))) return;
     try {
       await deleteService(service.id);
       const fresh = await getProfessionalProfile();
       setProfile(fresh);
-      setNotice("Service supprimé.");
+      setNotice(t("prow.serviceDeleted"));
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -155,171 +183,156 @@ export default function ProfessionalDashboard() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Espace professionnel</h1>
-      <p className="mt-1 text-sm text-gray-600">
-        Gérez votre profil, vos services et les demandes de vos clients.
-      </p>
+      <h1 className={`${heading} text-2xl`}>{t("prow.title")}</h1>
+      <p className={`${muted} mt-1 text-sm`}>{t("prow.subtitle")}</p>
 
-      {notice && (
-        <div
-          className="mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-          role="status"
-        >
-          {notice}
-        </div>
-      )}
+      {notice && <div className={`${noticeCls.success} mt-4`} role="status">{notice}</div>}
       {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         {/* ---- Profil ---- */}
-        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Mon profil</h2>
-          <form onSubmit={handleProfileSubmit} className="mt-4 space-y-3">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Métier</span>
-              <input
-                type="text"
-                required
-                value={profession}
-                onChange={(event) => setProfession(event.target.value)}
-                placeholder="Ex : Réparateur de téléphones"
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Ville</span>
-              <input
-                type="text"
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-                placeholder="Ex : Yaoundé"
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Présentation</span>
-              <textarea
-                value={bio}
-                onChange={(event) => setBio(event.target.value)}
-                rows={3}
-                placeholder="Votre expérience, votre zone d'intervention…"
-                className={inputClass}
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={profileSubmitting}
-              className="rounded-md bg-brand-green px-5 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
-            >
-              {profileSubmitting ? "Enregistrement…" : "Enregistrer mon profil"}
-            </button>
-          </form>
+        <section className={card}>
+          <div className="p-5">
+            <h2 className={`${heading} text-lg`}>{t("prow.profile")}</h2>
+            <form onSubmit={handleProfileSubmit} className="mt-4 space-y-3">
+              <label className="block">
+                <span className={`${label} mb-1`}>{t("prow.profession")}</span>
+                <input
+                  type="text"
+                  required
+                  value={profession}
+                  onChange={(event) => setProfession(event.target.value)}
+                  placeholder={t("prow.professionPlaceholder")}
+                  className={input}
+                />
+              </label>
+              <label className="block">
+                <span className={`${label} mb-1`}>{t("prow.city")}</span>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                  placeholder={t("merchant.storeCityField")}
+                  className={input}
+                />
+              </label>
+              <label className="block">
+                <span className={`${label} mb-1`}>{t("prow.bio")}</span>
+                <textarea
+                  value={bio}
+                  onChange={(event) => setBio(event.target.value)}
+                  rows={3}
+                  placeholder={t("prow.bioPlaceholder")}
+                  className={input}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={profileSubmitting}
+                className={`${btnPrimary} disabled:opacity-50`}
+              >
+                {profileSubmitting ? t("common.saving") : t("prow.saveProfile")}
+              </button>
+            </form>
+          </div>
         </section>
 
         {/* ---- Services ---- */}
-        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Mes services</h2>
-          <form onSubmit={handleServiceSubmit} className="mt-4 space-y-3">
-            <input
-              type="text"
-              required
-              value={serviceName}
-              onChange={(event) => setServiceName(event.target.value)}
-              placeholder="Nom du service (ex : Changement d'écran)"
-              className={inputClass}
-            />
-            <input
-              type="number"
-              min="0"
-              value={servicePrice}
-              onChange={(event) => setServicePrice(event.target.value)}
-              placeholder="Tarif indicatif (FCFA)"
-              className={inputClass}
-            />
-            <button
-              type="submit"
-              disabled={serviceSubmitting}
-              className="rounded-md bg-brand-green px-5 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
-            >
-              {serviceSubmitting ? "Enregistrement…" : "Ajouter le service"}
-            </button>
-          </form>
-
-          <div className="mt-4 space-y-2">
-            {profile?.services.length === 0 && (
-              <p className="text-sm text-gray-500">Aucun service publié.</p>
-            )}
-            {profile?.services.map((service) => (
-              <div
-                key={service.id}
-                className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
+        <section className={card}>
+          <div className="p-5">
+            <h2 className={`${heading} text-lg`}>{t("prow.services")}</h2>
+            <form onSubmit={handleServiceSubmit} className="mt-4 space-y-3">
+              <input
+                type="text"
+                required
+                value={serviceName}
+                onChange={(event) => setServiceName(event.target.value)}
+                placeholder={t("prow.serviceNamePlaceholder")}
+                className={input}
+              />
+              <input
+                type="number"
+                min="0"
+                value={servicePrice}
+                onChange={(event) => setServicePrice(event.target.value)}
+                placeholder={t("prow.servicePrice")}
+                className={input}
+              />
+              <button
+                type="submit"
+                disabled={serviceSubmitting}
+                className={`${btnPrimary} disabled:opacity-50`}
               >
-                <div>
-                  <p className="font-medium text-gray-900">{service.name}</p>
-                  <p className="text-xs text-gray-500">
+                {serviceSubmitting ? t("common.saving") : t("prow.addService")}
+              </button>
+            </form>
+
+            <div className="mt-4 space-y-2">
+              {profile?.services.length === 0 && (
+                <p className={`${muted} text-sm`}>{t("pro.noServices")}</p>
+              )}
+              {profile?.services.map((service) => (
+                <div
+                  key={service.id}
+                  className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={`${heading} font-medium`}>{service.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteService(service)}
+                      className="text-xs font-medium text-brand-red hover:underline"
+                    >
+                      {t("common.delete")}
+                    </button>
+                  </div>
+                  <p className={`${muted} text-xs`}>
                     {service.price !== null && service.price !== undefined
-                      ? `${FORMAT.format(service.price)} ${service.currency}`
-                      : "Tarif sur demande"}
+                      ? `${formatNumber(service.price)} FCFA`
+                      : t("pro.onRequest")}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteService(service)}
-                  className="text-xs font-medium text-brand-red hover:underline"
-                >
-                  Supprimer
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
       </div>
 
       {/* ---- Demandes reçues ---- */}
-      <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Demandes reçues ({requests.length})
+      <section className={`${card} mt-8 p-5`}>
+        <h2 className={`${heading} text-lg`}>
+          {t("prow.inbox")} ({requests.length})
         </h2>
         {requests.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">
-            Aucune demande pour le moment. Publiez vos services pour recevoir des clients.
-          </p>
+          <p className={`${muted} mt-3 text-sm`}>{t("prow.inboxEmpty")}</p>
         ) : (
           <div className="mt-4 space-y-3">
             {requests.map((request) => (
-              <div key={request.id} className="rounded-lg border border-gray-200 p-4">
+              <div key={request.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-gray-900">{request.service_name}</p>
-                    <p className="text-sm text-gray-500">
-                      Client : {request.client_id} · {request.profession}
+                    <p className={`${heading} font-semibold`}>{request.service_name}</p>
+                    <p className={`${muted} text-sm`}>
+                      {t("prow.requestFrom", {
+                        client: String(request.client_id),
+                        service: request.profession ?? request.service_name,
+                      })}
                     </p>
                     {request.price !== null && request.price !== undefined && (
-                      <p className="text-sm text-gray-500">
-                        Tarif : {FORMAT.format(request.price)} {request.currency}
+                      <p className={`${muted} text-sm`}>
+                        {formatNumber(request.price)} {request.currency}
                       </p>
                     )}
+                    <p className={`${muted} text-xs`}>
+                      {t("prow.sentOn", { date: formatDate(request.created_at) })}
+                    </p>
                     {request.message && (
-                      <p className="mt-2 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                      <p className="mt-2 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600 dark:bg-slate-700/60 dark:text-slate-300">
                         {request.message}
                       </p>
                     )}
                   </div>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      request.status === "COMPLETED"
-                        ? "bg-green-100 text-green-700"
-                        : request.status === "DECLINED" || request.status === "CANCELLED"
-                          ? "bg-red-100 text-red-700"
-                          : request.status === "IN_PROGRESS"
-                            ? "bg-brand-yellow/30 text-gray-700"
-                            : request.status === "ACCEPTED"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    {STATUS_LABELS[request.status]}
-                  </span>
+                  <span className={statusClass(request.status)}>{statusLabel(request.status)}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {request.status === "PENDING" && (
@@ -327,16 +340,16 @@ export default function ProfessionalDashboard() {
                       <button
                         type="button"
                         onClick={() => handleRequestAction(request.id, "accept")}
-                        className="rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+                        className={`${btnPrimary} px-3 py-1.5 text-xs`}
                       >
-                        Accepter
+                        {t("prow.accept")}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleRequestAction(request.id, "decline")}
-                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-brand-red hover:bg-red-50"
+                        className={`${btnDanger} px-3 py-1.5 text-xs`}
                       >
-                        Refuser
+                        {t("prow.decline")}
                       </button>
                     </>
                   )}
@@ -344,18 +357,18 @@ export default function ProfessionalDashboard() {
                     <button
                       type="button"
                       onClick={() => handleRequestAction(request.id, "start")}
-                      className="rounded-md bg-brand-yellow/40 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:brightness-95"
+                      className="rounded-md bg-brand-yellow/40 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:brightness-95 dark:text-slate-200"
                     >
-                      Démarrer l'intervention
+                      {t("prow.start")}
                     </button>
                   )}
                   {request.status === "IN_PROGRESS" && (
                     <button
                       type="button"
                       onClick={() => handleRequestAction(request.id, "complete")}
-                      className="rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+                      className={`${btnPrimary} px-3 py-1.5 text-xs`}
                     >
-                      Terminer
+                      {t("prow.complete")}
                     </button>
                   )}
                 </div>

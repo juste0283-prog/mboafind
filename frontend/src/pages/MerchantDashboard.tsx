@@ -1,4 +1,4 @@
-// Tableau de bord commençant : gestion des boutiques, produits et prix.
+// Tableau de bord commençant : gestion des boutiques (avec carte), produits et prix.
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   createOrUpdatePrice,
@@ -16,24 +16,49 @@ import {
   updateStore,
 } from "../services/catalog";
 import type { Category, PriceManage, ProductAdmin, Store } from "../types";
-import { FORMAT } from "../types";
 import ErrorMessage from "../components/common/ErrorMessage";
 import Spinner from "../components/common/Spinner";
+import LocationPicker from "../components/map/LocationPicker";
+import { useI18n } from "../i18n/I18nContext";
 import { getApiErrorMessage } from "../utils/apiError";
+import {
+  btnPrimary,
+  btnSecondary,
+  card,
+  input,
+  label,
+  muted,
+  heading,
+  badge,
+  notice as noticeCls,
+  tableHead,
+  tableRow,
+} from "../styles/classes";
 
-const inputClass =
-  "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30";
+interface StoreFormState {
+  name: string;
+  description: string;
+  city: string;
+  address: string;
+  phone: string;
+  opening_hours: string;
+  latitude: string;
+  longitude: string;
+}
 
-const emptyStoreForm = {
+const createEmptyForm = (): StoreFormState => ({
   name: "",
   description: "",
   city: "",
   address: "",
   phone: "",
   opening_hours: "",
-};
+  latitude: "",
+  longitude: "",
+});
 
 export default function MerchantDashboard() {
+  const { t, formatNumber } = useI18n();
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,7 +66,7 @@ export default function MerchantDashboard() {
   const [notice, setNotice] = useState<string | null>(null);
 
   // Formulaire création / édition boutique
-  const [storeForm, setStoreForm] = useState(emptyStoreForm);
+  const [storeForm, setStoreForm] = useState<StoreFormState>(createEmptyForm);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [storeSubmitting, setStoreSubmitting] = useState(false);
 
@@ -57,6 +82,24 @@ export default function MerchantDashboard() {
   const [priceAmount, setPriceAmount] = useState("");
   const [priceAvailable, setPriceAvailable] = useState(true);
   const [priceSubmitting, setPriceSubmitting] = useState(false);
+
+  // Ecoutes du géocode inversé (remplissage adresse / ville).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ address: string; city: string }>).detail;
+      if (detail?.address) {
+        setStoreForm((form) => ({
+          ...form,
+          address: form.address || detail.address,
+          city: form.city || detail.city,
+        }));
+      } else if (detail?.city) {
+        setStoreForm((form) => (form.city ? form : { ...form, city: detail.city }));
+      }
+    };
+    window.addEventListener("mboafind:geocode", handler);
+    return () => window.removeEventListener("mboafind:geocode", handler);
+  }, []);
 
   const loadStores = useCallback(async () => {
     setLoading(true);
@@ -97,21 +140,33 @@ export default function MerchantDashboard() {
       .catch(() => setPrices([]));
   }, [selectedStore]);
 
+  const buildPayload = () => ({
+    name: storeForm.name,
+    description: storeForm.description.trim() || null,
+    city: storeForm.city.trim() || null,
+    address: storeForm.address.trim() || null,
+    phone: storeForm.phone.trim() || null,
+    opening_hours: storeForm.opening_hours.trim() || null,
+    latitude: storeForm.latitude ? Number(storeForm.latitude) : null,
+    longitude: storeForm.longitude ? Number(storeForm.longitude) : null,
+  });
+
   const handleStoreSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setStoreSubmitting(true);
     setError(null);
     try {
+      const payload = buildPayload();
       if (editingStore) {
-        await updateStore(editingStore.id, storeForm);
-        setNotice("Boutique mise à jour.");
+        await updateStore(editingStore.id, payload);
+        setNotice(t("merchant.storeSaved"));
       } else {
-        const created = await createStore(storeForm);
+        const created = await createStore(payload);
         setSelectedStore(created);
-        setNotice("Boutique créée avec succès.");
+        setNotice(t("merchant.storeCreated"));
       }
       setEditingStore(null);
-      setStoreForm(emptyStoreForm);
+      setStoreForm(createEmptyForm());
       await loadStores();
     } catch (err) {
       setError(getApiErrorMessage(err));
@@ -129,14 +184,21 @@ export default function MerchantDashboard() {
       address: store.address ?? "",
       phone: store.phone ?? "",
       opening_hours: store.opening_hours ?? "",
+      latitude: store.latitude !== null && store.latitude !== undefined ? String(store.latitude) : "",
+      longitude: store.longitude !== null && store.longitude !== undefined ? String(store.longitude) : "",
     });
   };
 
+  const resetStoreForm = () => {
+    setEditingStore(null);
+    setStoreForm(createEmptyForm());
+  };
+
   const handleDeleteStore = async (store: Store) => {
-    if (!window.confirm(`Supprimer définitivement la boutique « ${store.name} » ?`)) return;
+    if (!window.confirm(t("merchant.deleteStoreConfirm", { name: store.name }))) return;
     try {
       await deleteStore(store.id);
-      setNotice("Boutique supprimée.");
+      setNotice(t("merchant.deleteStoreDone"));
       if (selectedStore?.id === store.id) setSelectedStore(null);
       await loadStores();
     } catch (err) {
@@ -191,7 +253,7 @@ export default function MerchantDashboard() {
           is_available: priceAvailable,
         });
       }
-      setNotice(selectedProduct ? "Produit et prix mis à jour." : "Produit ajouté à votre boutique.");
+      setNotice(selectedProduct ? t("merchant.productSaved") : t("merchant.productAdded"));
       setProductModal(false);
       const freshProducts = await listStoreProducts(selectedStore.id);
       setProducts(freshProducts);
@@ -205,12 +267,12 @@ export default function MerchantDashboard() {
   };
 
   const handleProductDelete = async (product: ProductAdmin) => {
-    if (!window.confirm(`Supprimer le produit « ${product.name} » ?`)) return;
+    if (!window.confirm(t("merchant.deleteProductConfirm", { name: product.name }))) return;
     try {
       await deleteProduct(product.id);
       const freshProducts = await listStoreProducts(selectedStore!.id);
       setProducts(freshProducts);
-      setNotice("Produit supprimé.");
+      setNotice(t("merchant.productDeleted"));
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -228,12 +290,12 @@ export default function MerchantDashboard() {
   };
 
   const handlePriceDelete = async (price: PriceManage) => {
-    if (!window.confirm("Supprimer cette offre de prix ?")) return;
+    if (!window.confirm(t("merchant.deletePriceConfirm"))) return;
     try {
       await deletePrice(price.id);
       const fresh = await listStorePrices(selectedStore!.id);
       setPrices(fresh);
-      setNotice("Offre de prix supprimée.");
+      setNotice(t("merchant.priceDeleted"));
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -243,327 +305,326 @@ export default function MerchantDashboard() {
     return <Spinner fullScreen />;
   }
 
+  const pickedPosition =
+    storeForm.latitude && storeForm.longitude
+      ? { lat: Number(storeForm.latitude), lng: Number(storeForm.longitude) }
+      : null;
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Espace commençant</h1>
-      <p className="mt-1 text-sm text-gray-600">
-        Gérez vos boutiques, vos produits et vos prix en toute simplicité.
-      </p>
+      <h1 className={`${heading} text-2xl`}>{t("merchant.title")}</h1>
+      <p className={`${muted} mt-1 text-sm`}>{t("merchant.subtitle")}</p>
 
       {notice && (
-        <div
-          className="mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-          role="status"
-        >
+        <div className={`${noticeCls.success} mt-4`} role="status">
           {notice}
         </div>
       )}
       {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
 
-      {/* ---- Gestion des boutiques ---- */}
       <section className="mt-8 grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="flex items-center justify-between text-lg font-semibold text-gray-900">
-            Mes boutiques
-            <button
-              type="button"
-              onClick={() => {
-                setEditingStore(null);
-                setStoreForm(emptyStoreForm);
-              }}
-              className="rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
-            >
-              + Nouvelle
-            </button>
-          </h2>
-          {stores.length === 0 ? (
-            <p className="mt-3 text-sm text-gray-500">
-              Aucune boutique. Créez-en une pour publier vos produits.
-            </p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {stores.map((store) => (
-                <li
-                  key={store.id}
-                  className={`rounded-lg border p-3 ${
-                    selectedStore?.id === store.id
-                      ? "border-brand-green bg-green-50"
-                      : "border-gray-200"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className="w-full text-left"
-                    onClick={() => setSelectedStore(store)}
-                  >
-                    <p className="font-semibold text-gray-900">{store.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {store.city ?? "Ville non renseignée"}
-                      {store.is_verified && " · Vérifiée"}
-                    </p>
-                  </button>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startEditStore(store)}
-                      className="text-xs font-medium text-brand-green hover:underline"
-                    >
-                      Modifier
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteStore(store)}
-                      className="text-xs font-medium text-brand-red hover:underline"
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <form onSubmit={handleStoreSubmit} className="mt-4 space-y-3 border-t border-gray-100 pt-4">
-            <p className="text-sm font-semibold text-gray-700">
-              {editingStore ? `Modifier « ${editingStore.name} »` : "Créer une boutique"}
-            </p>
-            <input
-              type="text"
-              required
-              placeholder="Nom de la boutique"
-              value={storeForm.name}
-              onChange={(event) => setStoreForm({ ...storeForm, name: event.target.value })}
-              className={inputClass}
-            />
-            <input
-              type="text"
-              placeholder="Ville (ex : Yaoundé)"
-              value={storeForm.city}
-              onChange={(event) => setStoreForm({ ...storeForm, city: event.target.value })}
-              className={inputClass}
-            />
-            <input
-              type="text"
-              placeholder="Adresse"
-              value={storeForm.address}
-              onChange={(event) => setStoreForm({ ...storeForm, address: event.target.value })}
-              className={inputClass}
-            />
-            <input
-              type="text"
-              placeholder="Téléphone"
-              value={storeForm.phone}
-              onChange={(event) => setStoreForm({ ...storeForm, phone: event.target.value })}
-              className={inputClass}
-            />
-            <input
-              type="text"
-              placeholder="Horaires (ex : 8h00 - 18h00)"
-              value={storeForm.opening_hours}
-              onChange={(event) => setStoreForm({ ...storeForm, opening_hours: event.target.value })}
-              className={inputClass}
-            />
-            <textarea
-              placeholder="Description"
-              value={storeForm.description}
-              onChange={(event) => setStoreForm({ ...storeForm, description: event.target.value })}
-              rows={2}
-              className={inputClass}
-            />
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={storeSubmitting}
-                className="flex-1 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
-              >
-                {storeSubmitting
-                  ? "Enregistrement…"
-                  : editingStore
-                    ? "Enregistrer"
-                    : "Créer la boutique"}
-              </button>
-              {editingStore && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingStore(null);
-                    setStoreForm(emptyStoreForm);
-                  }}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-
-        {/* ---- Produits & prix de la boutique sélectionnée ---- */}
-        {selectedStore ? (
-          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Produits de « {selectedStore.name} »
-            </h2>
-            <div className="mt-3 flex flex-wrap gap-2">
+        <div className={card}>
+          <div className="p-5">
+            <h2 className={`${heading} flex items-center justify-between text-lg`}>
+              {t("merchant.stores")}
               <button
                 type="button"
-                onClick={openAddProduct}
-                className="rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+                onClick={resetStoreForm}
+                className={`${btnPrimary} px-3 py-1.5 text-xs`}
               >
-                + Ajouter un produit
+                {t("merchant.newStore")}
               </button>
-              {products.length > 0 && (
-                <button
-                  type="button"
-                  onClick={openAddProduct}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  Ajouter un prix à un produit existant
-                </button>
-              )}
-            </div>
-
-            {products.length === 0 ? (
-              <p className="mt-4 text-sm text-gray-500">
-                Aucun produit dans cette boutique. Ajoutez votre premier produit pour être visible
-                par les clients.
-              </p>
+            </h2>
+            {stores.length === 0 ? (
+              <p className={`${muted} mt-3 text-sm`}>{t("merchant.noStores")}</p>
             ) : (
-              <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2">Produit</th>
-                      <th className="px-3 py-2">Prix</th>
-                      <th className="px-3 py-2">Dispo</th>
-                      <th className="px-3 py-2">Confirmations</th>
-                      <th className="px-3 py-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {products.map((product) => {
-                      const price = prices.find((p) => p.product_id === product.id);
-                      return (
-                        <tr key={product.id} className="align-top hover:bg-gray-50">
-                          <td className="px-3 py-2">
-                            <p className="font-medium text-gray-900">{product.name}</p>
-                            {product.brand && (
-                              <p className="text-xs text-gray-500">{product.brand}</p>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 font-semibold">
-                            {price ? `${FORMAT.format(price.amount)} FCFA` : "—"}
-                          </td>
-                          <td className="px-3 py-2">
-                            {price ? (
-                              <button
-                                type="button"
-                                onClick={() => quickToggleAvailability(price)}
-                                title="Basculer la disponibilité"
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                  price.is_available
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-red-100 text-red-700"
-                                }`}
-                              >
-                                {price.is_available ? "Disponible" : "Indisponible"}
-                              </button>
-                            ) : (
-                              <span className="text-xs text-gray-400">Aucun prix</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-500">
-                            {price?.confirmed_count ?? 0}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex justify-end gap-2 text-xs">
-                              <button
-                                type="button"
-                                onClick={() => openEditProduct(product)}
-                                className="font-medium text-brand-green hover:underline"
-                              >
-                                Modifier
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleProductDelete(product)}
-                                className="font-medium text-brand-red hover:underline"
-                              >
-                                Supprimer
-                              </button>
-                              {price && (
+              <ul className="mt-3 space-y-2">
+                {stores.map((store) => (
+                  <li
+                    key={store.id}
+                    className={`rounded-lg border p-3 ${
+                      selectedStore?.id === store.id
+                        ? "border-brand-green bg-green-50 dark:bg-green-900/20"
+                        : "border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="w-full text-left"
+                      onClick={() => setSelectedStore(store)}
+                    >
+                      <p className={`${heading} font-semibold`}>{store.name}</p>
+                      <p className={`${muted} text-xs`}>
+                        {t("merchant.storeCityValue", {
+                          city: store.city ?? t("merchant.storeCity"),
+                          verified: store.is_verified ? t("merchant.verified") : "",
+                        })}
+                      </p>
+                    </button>
+                    <div className="mt-2 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => startEditStore(store)}
+                        className="text-xs font-medium text-brand-green hover:underline"
+                      >
+                        {t("merchant.editStore")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteStore(store)}
+                        className="text-xs font-medium text-brand-red hover:underline"
+                      >
+                        {t("merchant.deleteStore")}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form onSubmit={handleStoreSubmit} className="mt-4 space-y-3 border-t border-slate-100 pt-4 dark:border-slate-700">
+              <p className={`${heading} text-sm font-semibold`}>
+                {editingStore
+                  ? t("merchant.storeFormEdit", { name: editingStore.name })
+                  : t("merchant.storeFormTitle")}
+              </p>
+              <input
+                type="text"
+                required
+                placeholder={t("merchant.storeName")}
+                value={storeForm.name}
+                onChange={(event) => setStoreForm({ ...storeForm, name: event.target.value })}
+                className={input}
+              />
+              <input
+                type="text"
+                placeholder={t("merchant.storeCityField")}
+                value={storeForm.city}
+                onChange={(event) => setStoreForm({ ...storeForm, city: event.target.value })}
+                className={input}
+              />
+              <input
+                type="text"
+                placeholder={t("merchant.storeAddress")}
+                value={storeForm.address}
+                onChange={(event) => setStoreForm({ ...storeForm, address: event.target.value })}
+                className={input}
+              />
+              <input
+                type="text"
+                placeholder={t("merchant.storePhone")}
+                value={storeForm.phone}
+                onChange={(event) => setStoreForm({ ...storeForm, phone: event.target.value })}
+                className={input}
+              />
+              <input
+                type="text"
+                placeholder={t("merchant.storeHours")}
+                value={storeForm.opening_hours}
+                onChange={(event) => setStoreForm({ ...storeForm, opening_hours: event.target.value })}
+                className={input}
+              />
+              <textarea
+                placeholder={t("merchant.storeDescription")}
+                value={storeForm.description}
+                onChange={(event) => setStoreForm({ ...storeForm, description: event.target.value })}
+                rows={2}
+                className={input}
+              />
+
+              <details className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                <summary className="cursor-pointer text-xs font-medium text-slate-600 dark:text-slate-300">
+                  🗺️ Localisation
+                </summary>
+                <div className="mt-2">
+                  <LocationPicker
+                    value={pickedPosition}
+                    onChange={(position) =>
+                      setStoreForm((form) => ({
+                        ...form,
+                        latitude: String(position.lat),
+                        longitude: String(position.lng),
+                      }))
+                    }
+                  />
+                  {pickedPosition && (
+                    <p className={`${muted} mt-2 text-xs`}>
+                      {pickedPosition.lat.toFixed(5)}, {pickedPosition.lng.toFixed(5)}
+                    </p>
+                  )}
+                </div>
+              </details>
+
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={storeSubmitting}
+                  className={`${btnPrimary} flex-1`}
+                >
+                  {storeSubmitting
+                    ? t("common.saving")
+                    : editingStore
+                      ? t("common.save")
+                      : t("merchant.storeCreate")}
+                </button>
+                {editingStore && (
+                  <button type="button" onClick={resetStoreForm} className={btnSecondary}>
+                    {t("common.cancel")}
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {selectedStore ? (
+          <div className={`${card} lg:col-span-2`}>
+            <div className="p-5">
+              <h2 className={`${heading} text-lg`}>
+                {t("merchant.productsOf", { name: selectedStore.name })}
+              </h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={openAddProduct} className={`${btnPrimary} px-3 py-1.5 text-xs`}>
+                  {t("merchant.addProduct")}
+                </button>
+                {products.length > 0 && (
+                  <button type="button" onClick={openAddProduct} className={`${btnSecondary} px-3 py-1.5 text-xs`}>
+                    {t("merchant.addPriceToProduct")}
+                  </button>
+                )}
+              </div>
+
+              {products.length === 0 ? (
+                <p className={`${muted} mt-4 text-sm`}>{t("merchant.noProducts")}</p>
+              ) : (
+                <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                  <table className="w-full text-left text-sm">
+                    <thead className={tableHead}>
+                      <tr>
+                        <th className="px-3 py-2">{t("merchant.productCol")}</th>
+                        <th className="px-3 py-2">{t("merchant.priceCol")}</th>
+                        <th className="px-3 py-2">{t("merchant.availableCol")}</th>
+                        <th className="px-3 py-2">{t("merchant.confirmationsCol")}</th>
+                        <th className="px-3 py-2 text-right">{t("merchant.actionsCol")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {products.map((product) => {
+                        const price = prices.find((p) => p.product_id === product.id);
+                        return (
+                          <tr key={product.id} className={tableRow}>
+                            <td className="px-3 py-2 align-top">
+                              <p className={`${heading} font-medium`}>{product.name}</p>
+                              {product.brand && (
+                                <p className={`${muted} text-xs`}>{product.brand}</p>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 font-semibold">
+                              {price ? `${formatNumber(price.amount)} FCFA` : "—"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {price ? (
                                 <button
                                   type="button"
-                                  onClick={() => handlePriceDelete(price)}
-                                  className="font-medium text-gray-400 hover:underline"
-                                  title="Retirer ce prix (le produit reste au catalogue)"
+                                  onClick={() => quickToggleAvailability(price)}
+                                  title={t("merchant.toggleAvailability")}
+                                  className={price.is_available ? badge.green : badge.red}
                                 >
-                                  Retirer le prix
+                                  {price.is_available ? t("merchant.available") : t("merchant.unavailable")}
                                 </button>
+                              ) : (
+                                <span className={`${muted} text-xs`}>{t("merchant.noPrice")}</span>
                               )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="mt-3 text-xs text-gray-400">
-              Astuce : chaque produit peut avoir un prix par boutique. La date de mise à jour est
-              enregistrée automatiquement.
-            </p>
+                            </td>
+                            <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                              {price?.confirmed_count ?? 0}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex justify-end gap-2 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditProduct(product)}
+                                  className="font-medium text-brand-green hover:underline"
+                                >
+                                  {t("merchant.editProduct")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleProductDelete(product)}
+                                  className="font-medium text-brand-red hover:underline"
+                                >
+                                  {t("merchant.deleteProduct")}
+                                </button>
+                                {price && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePriceDelete(price)}
+                                    className="font-medium text-slate-400 hover:underline dark:text-slate-500"
+                                    title={t("merchant.removePrice")}
+                                  >
+                                    {t("merchant.removePrice")}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className={`${muted} mt-3 text-xs`}>{t("merchant.tip")}</p>
+            </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 lg:col-span-2">
-            Sélectionnez une boutique pour gérer ses produits et ses prix.
+          <div className={`${card} p-8 text-center text-sm lg:col-span-2`}>
+            <p className={`${muted}`}>{t("merchant.selectStore")}</p>
           </div>
         )}
       </section>
 
-      {/* ---- Modal produit ---- */}
       {productModal && selectedStore && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={() => setProductModal(false)}
         >
           <form
             onSubmit={handleProductSubmit}
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className={`${card} w-full max-w-md p-6 shadow-xl`}
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-bold text-gray-900">
-              {selectedProduct ? "Modifier le produit" : "Ajouter un produit"}
+            <h3 className={`${heading} text-lg`}>
+              {selectedProduct ? t("merchant.editProductTitle") : t("merchant.newProduct")}
             </h3>
             <div className="mt-4 space-y-3">
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Nom du produit</span>
+                <span className={label}>{t("merchant.productName")}</span>
                 <input
                   type="text"
                   required
                   value={productName}
                   onChange={(event) => setProductName(event.target.value)}
-                  className={inputClass}
+                  className={input}
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Marque (optionnel)</span>
+                <span className={label}>{t("merchant.productBrand")}</span>
                 <input
                   type="text"
                   value={productBrand}
                   onChange={(event) => setProductBrand(event.target.value)}
-                  className={inputClass}
+                  className={input}
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Catégorie</span>
+                <span className={label}>{t("merchant.productCategory")}</span>
                 <select
                   value={productCategory}
                   onChange={(event) => setProductCategory(event.target.value)}
-                  className={inputClass}
+                  className={input}
                 >
-                  <option value="">Aucune</option>
+                  <option value="">{t("merchant.noCategory")}</option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={String(cat.id)}>
                       {cat.name}
@@ -572,40 +633,32 @@ export default function MerchantDashboard() {
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Prix (FCFA)</span>
+                <span className={label}>{t("merchant.productPrice")}</span>
                 <input
                   type="number"
                   min="1"
                   value={priceAmount}
                   onChange={(event) => setPriceAmount(event.target.value)}
-                  placeholder="Ex : 25000"
-                  className={inputClass}
+                  placeholder={t("merchant.pricePlaceholder")}
+                  className={input}
                 />
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                 <input
                   type="checkbox"
                   checked={priceAvailable}
                   onChange={(event) => setPriceAvailable(event.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-green focus:ring-brand-green"
                 />
-                Produit disponible
+                {t("merchant.availableCheck")}
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setProductModal(false)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Annuler
+              <button type="button" onClick={() => setProductModal(false)} className={btnSecondary}>
+                {t("common.cancel")}
               </button>
-              <button
-                type="submit"
-                disabled={priceSubmitting}
-                className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
-              >
-                {priceSubmitting ? "Enregistrement…" : "Enregistrer"}
+              <button type="submit" disabled={priceSubmitting} className={btnPrimary}>
+                {priceSubmitting ? t("common.saving") : t("common.save")}
               </button>
             </div>
           </form>
