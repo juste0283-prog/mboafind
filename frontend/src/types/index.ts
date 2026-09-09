@@ -328,6 +328,29 @@ export interface FavoriteStatus {
   is_favorite: boolean;
 }
 
+// ---------------- Alertes de prix ----------------
+
+export interface PriceAlert {
+  id: number;
+  product_id: number;
+  product_name: string;
+  product_image?: string | null;
+  current_price?: number | null;
+  target_price: number;
+  currency: string;
+  is_active: boolean;
+  triggered: boolean;
+  triggered_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PriceAlertCreate {
+  product_id: number;
+  target_price: number;
+  currency?: string;
+}
+
 // ---------------- Modération admin ----------------
 
 export interface ReportAdmin extends Report {

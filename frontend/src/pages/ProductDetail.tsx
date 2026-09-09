@@ -5,8 +5,15 @@ import { Link, useParams } from "react-router-dom";
 import { getProduct, confirmPrice, getPriceHistory } from "../services/catalog";
 import { createReport } from "../services/reviews";
 import { addFavorite, getFavoriteStatus, removeFavorite } from "../services/favorites";
+import {
+  deletePriceAlert,
+  listPriceAlerts,
+  updatePriceAlert,
+  upsertPriceAlert,
+} from "../services/priceAlerts";
 import type {
   Offer,
+  PriceAlert,
   PriceHistoryEntry,
   ProductDetail as ProductDetailType,
 } from "../types";
@@ -50,6 +57,10 @@ export default function ProductDetail() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
 
+  const [priceAlert, setPriceAlert] = useState<PriceAlert | null>(null);
+  const [alertTarget, setAlertTarget] = useState("");
+  const [alertBusy, setAlertBusy] = useState(false);
+
   const [historyOpen, setHistoryOpen] = useState<Set<number>>(new Set());
   const [histories, setHistories] = useState<Map<number, PriceHistoryEntry[]>>(
     new Map(),
@@ -88,6 +99,29 @@ export default function ProductDetail() {
     getFavoriteStatus("PRODUCT", productId)
       .then((status) => {
         if (!cancelled) setIsFavorite(status.is_favorite);
+      })
+      .catch(() => {
+        /* non bloquant */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, productId]);
+
+  // Alerte de prix existante (utilisateur connecte uniquement).
+  useEffect(() => {
+    if (!user) {
+      setPriceAlert(null);
+      setAlertTarget("");
+      return;
+    }
+    let cancelled = false;
+    listPriceAlerts()
+      .then((alerts) => {
+        if (cancelled) return;
+        const mine = alerts.find((a) => a.product_id === productId) ?? null;
+        setPriceAlert(mine);
+        setAlertTarget(mine ? String(mine.target_price) : "");
       })
       .catch(() => {
         /* non bloquant */
@@ -207,6 +241,66 @@ export default function ProductDetail() {
     }
   };
 
+  const handleSaveAlert = async () => {
+    const target = Number(alertTarget);
+    if (!Number.isFinite(target) || target <= 0) {
+      setError(t("alerts.invalidTarget"));
+      return;
+    }
+    setAlertBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const saved = await upsertPriceAlert({
+        product_id: productId,
+        target_price: target,
+      });
+      setPriceAlert(saved);
+      setAlertTarget(String(saved.target_price));
+      setNotice(saved.triggered ? t("alerts.savedTriggered") : t("alerts.saved"));
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+
+  const handleToggleAlert = async () => {
+    if (!priceAlert) return;
+    setAlertBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const updated = await updatePriceAlert(priceAlert.id, {
+        is_active: !priceAlert.is_active,
+      });
+      setPriceAlert(updated);
+      setNotice(t("alerts.updated"));
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+
+  const handleRemoveAlert = async () => {
+    if (!priceAlert) return;
+    if (!window.confirm(t("common.deleteConfirm"))) return;
+    setAlertBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await deletePriceAlert(priceAlert.id);
+      setPriceAlert(null);
+      setAlertTarget("");
+      setNotice(t("alerts.removed"));
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setAlertBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <Link to="/recherche" className="text-sm text-brand-green hover:underline">
@@ -292,6 +386,89 @@ export default function ProductDetail() {
           <p className={`${muted} mt-4 border-t border-slate-100 pt-4 text-sm dark:border-slate-700`}>
             {t("product.noOffers")}
           </p>
+        )}
+
+        {user ? (
+          <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
+            {priceAlert?.triggered ? (
+              <p className="text-sm font-medium text-brand-green">{t("alerts.triggered")}</p>
+            ) : priceAlert ? (
+              <p className={`${muted} text-sm`}>
+                {priceAlert.is_active
+                  ? t("alerts.watching", { price: formatNumber(priceAlert.target_price) })
+                  : t("alerts.pausedNotice")}
+                {priceAlert.current_price !== null &&
+                  priceAlert.current_price !== undefined && (
+                    <>
+                      {" · "}
+                      {t("alerts.currentPrice", {
+                        price: formatNumber(priceAlert.current_price),
+                      })}
+                    </>
+                  )}
+              </p>
+            ) : (
+              <p className={`${muted} text-sm`}>
+                {product.min_price !== null && product.min_price !== undefined
+                  ? t("alerts.notifyOn", { price: formatNumber(product.min_price) })
+                  : t("alerts.noOffersNotice")}
+              </p>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label className="sr-only" htmlFor="alert-target">
+                {t("alerts.target")}
+              </label>
+              <div className="relative">
+                <input
+                  id="alert-target"
+                  type="number"
+                  min="1"
+                  step="100"
+                  value={alertTarget}
+                  onChange={(event) => setAlertTarget(event.target.value)}
+                  className={`${input} w-44 pr-12`}
+                  placeholder={t("alerts.target")}
+                />
+                <span className="absolute inset-y-0 right-3 flex items-center text-xs text-slate-400">
+                  FCFA
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveAlert}
+                disabled={alertBusy}
+                className={btnSecondary}
+              >
+                {priceAlert ? t("alerts.update") : t("alerts.save")}
+              </button>
+              {priceAlert && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleToggleAlert}
+                    disabled={alertBusy}
+                    className="text-xs font-medium text-slate-500 hover:underline dark:text-slate-300"
+                  >
+                    {priceAlert.is_active ? t("alerts.pause") : t("alerts.resume")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveAlert}
+                    disabled={alertBusy}
+                    className="text-xs font-medium text-brand-red hover:underline"
+                  >
+                    {t("alerts.delete")}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
+            <Link to="/login" className="text-sm text-brand-green hover:underline">
+              {t("alerts.login")}
+            </Link>
+          </div>
         )}
       </div>
 

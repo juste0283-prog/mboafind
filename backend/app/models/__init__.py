@@ -14,6 +14,7 @@ from app.models.service_request import ServiceRequest
 from app.models.review import Review
 from app.models.report import Report
 from app.models.favorite import Favorite
+from app.models.price_alert import PriceAlert
 
 __all__ = [
     "Base",
@@ -30,4 +31,5 @@ __all__ = [
     "Review",
     "Report",
     "Favorite",
+    "PriceAlert",
 ]

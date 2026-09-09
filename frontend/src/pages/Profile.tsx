@@ -7,8 +7,10 @@ import { useAuth } from "../hooks/useAuth";
 import { cancelRequest, listMyRequests } from "../services/serviceRequests";
 import { listMyReports, listMyReviews } from "../services/reviews";
 import { listFavorites, removeFavorite } from "../services/favorites";
+import { deletePriceAlert, listPriceAlerts, updatePriceAlert } from "../services/priceAlerts";
 import type {
   Favorite,
+  PriceAlert,
   Report,
   Review,
   ServiceRequest,
@@ -34,8 +36,9 @@ export default function Profile() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [tab, setTab] = useState<
-    "requests" | "reviews" | "reports" | "favorites"
+    "requests" | "reviews" | "reports" | "favorites" | "alerts"
   >("requests");
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,17 +99,19 @@ export default function Profile() {
     setLoadingHistory(true);
     setError(null);
     try {
-      const [requestsPage, reviewsList, reportsPage, favoritesList] =
+      const [requestsPage, reviewsList, reportsPage, favoritesList, alertsList] =
         await Promise.all([
           listMyRequests(),
           listMyReviews(),
           listMyReports(),
           listFavorites(),
+          listPriceAlerts(),
         ]);
       setRequests(requestsPage.items);
       setReviews(reviewsList);
       setReports(reportsPage.items);
       setFavorites(favoritesList);
+      setAlerts(alertsList);
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -143,6 +148,29 @@ export default function Profile() {
       await removeFavorite(favorite.item_type, favorite.item_id);
       setFavorites((prev) => prev.filter((f) => f.id !== favoriteId));
       setNotice(t("favorites.removed"));
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    }
+  };
+
+  const handleDeleteAlert = async (alert: PriceAlert) => {
+    if (!window.confirm(t("common.deleteConfirm"))) return;
+    try {
+      await deletePriceAlert(alert.id);
+      setAlerts((prev) => prev.filter((a) => a.id !== alert.id));
+      setNotice(t("alerts.removed"));
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    }
+  };
+
+  const handleToggleAlert = async (alert: PriceAlert) => {
+    try {
+      const updated = await updatePriceAlert(alert.id, {
+        is_active: !alert.is_active,
+      });
+      setAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      setNotice(t("alerts.updated"));
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -218,6 +246,7 @@ export default function Profile() {
                 { key: "reviews", label: t("profile.tabs.reviews") },
                 { key: "reports", label: t("profile.tabs.reports") },
                 { key: "favorites", label: t("favorites.tab") },
+                { key: "alerts", label: t("alerts.tab") },
               ] as const
             ).map((item) => (
               <button
@@ -339,6 +368,78 @@ export default function Profile() {
                     >
                       {t("favorites.remove")}
                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : tab === "alerts" ? (
+            <div className="mt-4 space-y-3">
+              {alerts.length === 0 && (
+                <p className={`${muted} text-sm`}>{t("alerts.empty")}</p>
+              )}
+              {alerts.map((alert) => (
+                <div key={alert.id} className={`${card} p-4`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`${heading} truncate font-semibold`}>
+                        <Link
+                          to={`/produits/${alert.product_id}`}
+                          className="hover:text-brand-green hover:underline"
+                        >
+                          {alert.product_name}
+                        </Link>
+                      </p>
+                      <p className={`${muted} mt-1 text-xs`}>
+                        {t("alerts.targetLabel", {
+                          price: formatNumber(alert.target_price),
+                        })}
+                        {alert.current_price !== null &&
+                          alert.current_price !== undefined && (
+                            <>
+                              {" · "}
+                              {t("alerts.currentLabel", {
+                                price: formatNumber(alert.current_price),
+                              })}
+                            </>
+                          )}
+                      </p>
+                      {!alert.is_active && (
+                        <p className={`${muted} mt-1 text-xs`}>
+                          {t("alerts.pausedNotice")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span
+                        className={
+                          alert.triggered
+                            ? badge.green
+                            : alert.is_active
+                              ? badge.yellow
+                              : badge.slate
+                        }
+                      >
+                        {alert.triggered
+                          ? t("alerts.triggeredShort")
+                          : alert.is_active
+                            ? t("alerts.watchingShort")
+                            : t("alerts.pausedShort")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleAlert(alert)}
+                        className="text-xs font-medium text-brand-green hover:underline"
+                      >
+                        {alert.is_active ? t("alerts.pause") : t("alerts.resume")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteAlert(alert)}
+                        className="text-xs font-medium text-brand-red hover:underline"
+                      >
+                        {t("alerts.delete")}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

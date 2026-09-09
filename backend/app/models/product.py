@@ -39,6 +39,9 @@ class Product(Base):
     category: Mapped["Category | None"] = relationship(back_populates="products")
     stores: Mapped[list["Store"]] = relationship(secondary="product_store", back_populates="products")
     prices: Mapped[list["Price"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    price_alerts: Mapped[list["PriceAlert"]] = relationship(
+        back_populates="product", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Product id={self.id} name={self.name!r}>"
