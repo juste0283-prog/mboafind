@@ -53,6 +53,18 @@ def test_product_detail(client, demo_catalog):
     assert body["offers"][0]["store_name"] == "Boutique Test"
 
 
+def test_product_detail_offers_localisation(client, demo_catalog):
+    """Chaque offre expose la localisation et la note moyenne de sa boutique."""
+    response = client.get(f"/api/v1/products/{demo_catalog['product_id']}")
+    assert response.status_code == 200
+    offer = response.json()["offers"][0]
+    assert offer["store_name"] == "Boutique Test"
+    assert offer["store_latitude"] == 3.8667
+    assert offer["store_longitude"] == 11.5167
+    assert isinstance(offer["store_rating_count"], int)
+    assert offer["store_rating_avg"] is None or isinstance(offer["store_rating_avg"], float)
+
+
 def test_product_detail_absent(client):
     """Une fiche produit inconnue renvoie 404."""
     response = client.get("/api/v1/products/999999")

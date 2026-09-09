@@ -360,6 +360,11 @@ export default function MerchantDashboard() {
                           verified: store.is_verified ? t("merchant.verified") : "",
                         })}
                       </p>
+                      {(store.latitude == null || store.longitude == null) && (
+                        <p className={`${badge.yellow} mt-1 inline-block`}>
+                          {t("merchant.noLocationBadge")}
+                        </p>
+                      )}
                     </button>
                     <div className="mt-2 flex gap-3">
                       <button
@@ -437,6 +442,12 @@ export default function MerchantDashboard() {
                   🗺️ Localisation
                 </summary>
                 <div className="mt-2">
+                  {editingStore &&
+                    (editingStore.latitude == null || editingStore.longitude == null) && (
+                      <p className={`${noticeCls.warning} mb-2`}>
+                        {t("merchant.locationMissingWarning")}
+                      </p>
+                    )}
                   <LocationPicker
                     value={pickedPosition}
                     onChange={(position) =>

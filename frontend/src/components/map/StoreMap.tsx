@@ -14,18 +14,20 @@ export default function StoreMap({
   center,
   markers,
   route,
+  zoom,
   className = "h-72",
 }: {
   center: { lat: number; lng: number };
   markers: MapMarker[];
   route?: [number, number][];
+  zoom?: number;
   className?: string;
 }) {
   return (
     <div className={`${className} overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700`}>
       <MapContainer
         center={[center.lat, center.lng]}
-        zoom={markers.length > 1 ? 13 : 15}
+        zoom={zoom ?? (markers.length > 1 ? 13 : 15)}
         scrollWheelZoom={false}
         className="h-full w-full"
       >

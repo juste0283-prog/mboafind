@@ -31,6 +31,10 @@ class PriceRead(BaseModel):
     store_name: str
     store_city: str | None = None
     store_is_verified: bool = False
+    store_latitude: float | None = None
+    store_longitude: float | None = None
+    store_rating_avg: float | None = None
+    store_rating_count: int = 0
     amount: float
     currency: str
     is_available: bool

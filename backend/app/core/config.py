@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Base de donnees
     DATABASE_URL: str = "sqlite:///./mboafind.db"
 
+    # Geocodage des boutiques (position par defaut via Nominatim)
+    GEOCODE_ENABLED: bool = True
+
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",

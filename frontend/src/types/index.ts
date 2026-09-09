@@ -86,6 +86,10 @@ export interface Offer {
   store_name: string;
   store_city?: string | null;
   store_is_verified: boolean;
+  store_latitude?: number | null;
+  store_longitude?: number | null;
+  store_rating_avg?: number | null;
+  store_rating_count?: number;
   amount: number;
   currency: string;
   is_available: boolean;

@@ -17,6 +17,7 @@ if TEST_DB_PATH.exists():
 os.environ["ENVIRONMENT"] = "testing"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH.as_posix()}"
 os.environ["SECRET_KEY"] = "test-secret-key-pour-les-tests-uniquement"
+os.environ["GEOCODE_ENABLED"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

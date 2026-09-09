@@ -42,6 +42,7 @@ from app.schemas.product import (
     ProductUpdate,
 )
 from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
+from app.services.geocode import geocode_address, geocode_enabled
 from app.services.trust import compute_trust_score
 from app.utils.slug import slugify, normalize_text, split_terms
 from app.utils.time import utcnow
@@ -192,14 +193,20 @@ def _price_to_read(
     *,
     db: Session,
     confirmed_by_me: bool = False,
+    rating: tuple[float | None, int] | None = None,
 ) -> PriceRead:
     """Serialize une offre (prix + boutique) avec son score de confiance."""
+    rating_avg, rating_count = rating if rating is not None else (None, 0)
     return PriceRead(
         id=price.id,
         store_id=store.id,
         store_name=store.name,
         store_city=store.city,
         store_is_verified=store.is_verified,
+        store_latitude=store.latitude,
+        store_longitude=store.longitude,
+        store_rating_avg=rating_avg,
+        store_rating_count=rating_count,
         amount=float(price.amount),
         currency=price.currency,
         is_available=price.is_available,
@@ -339,6 +346,23 @@ def get_product(
     store_ids = agg["store_ids"] if agg else set()
     avg, count = _rating_for_stores(db, store_ids)
 
+    # Notes moyennes par boutique (pour le classement economique des offres).
+    ratings: dict[int, tuple[float | None, int]] = {}
+    if store_ids:
+        rating_rows = (
+            db.query(Review.store_id, func.avg(Review.rating), func.count(Review.id))
+            .filter(
+                Review.store_id.in_(list(store_ids)),
+                Review.moderation_status.in_(_APPROVED),
+            )
+            .group_by(Review.store_id)
+            .all()
+        )
+        ratings = {
+            sid: (round(float(ra), 2) if ra is not None else None, int(rc))
+            for sid, ra, rc in rating_rows
+        }
+
     # Offres confirmees par l'utilisateur courant (une confirmation max par prix).
     confirmed_ids: set[int] = set()
     if current_user is not None and rows:
@@ -354,7 +378,11 @@ def get_product(
 
     offers = [
         _price_to_read(
-            price, store, db=db, confirmed_by_me=price.id in confirmed_ids
+            price,
+            store,
+            db=db,
+            confirmed_by_me=price.id in confirmed_ids,
+            rating=ratings.get(store.id),
         )
         for price, store, _ in rows
     ]
@@ -528,6 +556,22 @@ def _store_products(db: Session, store_id: int) -> list[ProductListItem]:
 
 
 # --------------------------------------------------- CRUD boutique (commercant)
+def _geocode_store_fallback(store: Store) -> None:
+    """Positionne latitude/longitude depuis la ville/adresse si absentes.
+
+    Best-effort : si le geocodage est desactive ou echoue, les coordonnees
+    restent vides et le commercant est averti cote client.
+    """
+    if store.latitude is not None and store.longitude is not None:
+        return
+    if not geocode_enabled():
+        return
+    result = geocode_address(store.city, store.address)
+    if result is None:
+        return
+    store.latitude, store.longitude = result
+
+
 def _ensure_store_owner(store: Store, user) -> None:
     """Verifie que l'utilisateur est le proprietaire de la boutique."""
     if store.owner_id != user.id:
@@ -551,6 +595,7 @@ def create_store(db: Session, user, payload: StoreCreate) -> StoreRead:
         longitude=payload.longitude,
         opening_hours=payload.opening_hours,
     )
+    _geocode_store_fallback(store)
     db.add(store)
     db.commit()
     db.refresh(store)
@@ -578,6 +623,7 @@ def update_store(db: Session, user, store_id: int, payload: StoreUpdate) -> Stor
     _ensure_store_owner(store, user)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(store, field, value)
+    _geocode_store_fallback(store)
     db.add(store)
     db.commit()
     db.refresh(store)

@@ -14,6 +14,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../i18n/I18nContext";
 import ErrorMessage from "../components/common/ErrorMessage";
 import Spinner from "../components/common/Spinner";
+import ProductStoresMap from "../components/map/ProductStoresMap";
 import { getApiErrorMessage } from "../utils/apiError";
 import {
   btnPrimary,
@@ -341,6 +342,8 @@ export default function ProductDetail() {
           </tbody>
         </table>
       </div>
+
+      {product.offers.length > 0 && <ProductStoresMap offers={product.offers} />}
 
       {reportOpen && reportTarget && (
         <div
