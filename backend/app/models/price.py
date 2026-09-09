@@ -22,6 +22,10 @@ class Price(Base):
     verification_status: Mapped[PriceVerificationStatus] = mapped_column(
         Enum(PriceVerificationStatus), default=PriceVerificationStatus.PENDING, nullable=False
     )
+    confirmed_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    last_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
@@ -29,7 +33,6 @@ class Price(Base):
     # Relations
     product: Mapped["Product"] = relationship(back_populates="prices")
     store: Mapped["Store"] = relationship(back_populates="prices")
-    reports: Mapped[list["Report"]] = relationship(back_populates="price")
 
     def __repr__(self) -> str:
         return f"<Price id={self.id} amount={self.amount} {self.currency}>"

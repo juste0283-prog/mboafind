@@ -11,7 +11,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.database.database import init_db
-from app.routers import auth, health, users
+from app.routers import (
+    auth,
+    categories,
+    health,
+    professionals,
+    products,
+    reports,
+    reviews,
+    service_requests,
+    stores,
+    users,
+)
 
 
 @asynccontextmanager
@@ -46,3 +57,11 @@ app.add_middleware(
 app.include_router(health.router, prefix=settings.API_V1_PREFIX)
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(users.router, prefix=settings.API_V1_PREFIX)
+app.include_router(categories.router, prefix=settings.API_V1_PREFIX)
+app.include_router(products.router, prefix=settings.API_V1_PREFIX)
+app.include_router(stores.stores_router, prefix=settings.API_V1_PREFIX)
+app.include_router(stores.prices_router, prefix=settings.API_V1_PREFIX)
+app.include_router(professionals.router, prefix=settings.API_V1_PREFIX)
+app.include_router(service_requests.router, prefix=settings.API_V1_PREFIX)
+app.include_router(reviews.router, prefix=settings.API_V1_PREFIX)
+app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
