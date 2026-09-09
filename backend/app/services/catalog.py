@@ -20,10 +20,17 @@ from sqlalchemy.orm import Session
 from app.models import Category, Price, Product, Review, Store
 from app.models.enums import ReviewModerationStatus
 from app.schemas.category import CategoryRead, CategorySummary
-from app.schemas.price import PriceConfirmRead, PriceRead
-from app.schemas.product import ProductDetail, ProductListItem, ProductPage
-from app.schemas.store import StoreDetail
-from app.utils.slug import normalize_text, split_terms
+from app.schemas.price import PriceConfirmRead, PriceManageRead, PriceRead
+from app.schemas.product import (
+    ProductAdminRead,
+    ProductCreate,
+    ProductDetail,
+    ProductListItem,
+    ProductPage,
+    ProductUpdate,
+)
+from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
+from app.utils.slug import slugify, normalize_text, split_terms
 from app.utils.time import utcnow
 
 _APPROVED = [ReviewModerationStatus.APPROVED]
@@ -380,6 +387,7 @@ def get_store(db: Session, store_id: int) -> StoreDetail:
         longitude=store.longitude,
         opening_hours=store.opening_hours,
         is_verified=store.is_verified,
+        owner_id=store.owner_id,
         rating_avg=round(float(avg), 2) if avg is not None else None,
         rating_count=int(count),
         products=_store_products(db, store.id),
@@ -422,3 +430,285 @@ def _store_products(db: Session, store_id: int) -> list[ProductListItem]:
         )
     items.sort(key=lambda p: p.avg_price if p.avg_price is not None else 0)
     return items
+
+
+# --------------------------------------------------- CRUD boutique (commercant)
+def _ensure_store_owner(store: Store, user) -> None:
+    """Verifie que l'utilisateur est le proprietaire de la boutique."""
+    if store.owner_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous n'etes pas le proprietaire de cette boutique",
+        )
+
+
+def create_store(db: Session, user, payload: StoreCreate) -> StoreRead:
+    """Cree une boutique pour un commerçant."""
+    store = Store(
+        owner_id=user.id,
+        name=payload.name,
+        description=payload.description,
+        phone=payload.phone,
+        email=payload.email,
+        address=payload.address,
+        city=payload.city,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        opening_hours=payload.opening_hours,
+    )
+    db.add(store)
+    db.commit()
+    db.refresh(store)
+    return StoreRead.model_validate(store)
+
+
+def list_my_stores(db: Session, user) -> list[StoreRead]:
+    """Liste les boutiques du commerçant connecte."""
+    stores = (
+        db.query(Store)
+        .filter(Store.owner_id == user.id)
+        .order_by(Store.created_at.desc())
+        .all()
+    )
+    return [StoreRead.model_validate(s) for s in stores]
+
+
+def update_store(db: Session, user, store_id: int, payload: StoreUpdate) -> StoreRead:
+    """Met a jour une boutique (proprietaire uniquement)."""
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Boutique introuvable"
+        )
+    _ensure_store_owner(store, user)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(store, field, value)
+    db.add(store)
+    db.commit()
+    db.refresh(store)
+    return StoreRead.model_validate(store)
+
+
+def delete_store(db: Session, user, store_id: int) -> None:
+    """Desactive une boutique (soft delete, proprietaire uniquement)."""
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Boutique introuvable"
+        )
+    _ensure_store_owner(store, user)
+    store.is_active = False
+    db.add(store)
+    db.commit()
+
+
+# --------------------------------------------------- CRUD produit (commercant)
+def _ensure_store_owner_of_price(db: Session, store_id: int, user) -> Store:
+    """Verifie qu'un prix appartient au commerçant via la boutique."""
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Boutique introuvable"
+        )
+    _ensure_store_owner(store, user)
+    return store
+
+
+def create_product(db: Session, user, store_id: int, payload: ProductCreate) -> ProductAdminRead:
+    """Cree un produit dans une boutique du commerçant."""
+    _ensure_store_owner_of_price(db, store_id, user)
+    existing = db.query(Product).filter(Product.slug == slugify(payload.name)).first()
+    if existing:
+        product = existing
+    else:
+        product = Product(
+            name=payload.name,
+            slug=slugify(payload.name),
+            description=payload.description,
+            brand=payload.brand,
+            image_url=payload.image_url,
+            category_id=payload.category_id,
+        )
+        db.add(product)
+        db.flush()
+    store = db.get(Store, store_id)
+    if product not in store.products:
+        store.products.append(product)
+    db.commit()
+    db.refresh(product)
+    return ProductAdminRead.model_validate(product)
+
+
+def list_my_products(db: Session, user, store_id: int) -> list[ProductAdminRead]:
+    """Liste les produits d'une boutique du commerçant."""
+    _ensure_store_owner_of_price(db, store_id, user)
+    products = (
+        db.query(Product)
+        .join(Price, Price.store_id == store_id)
+        .filter(Price.store_id == store_id, Product.is_active.is_(True))
+        .distinct()
+        .order_by(Product.name)
+        .all()
+    )
+    return [ProductAdminRead.model_validate(p) for p in products]
+
+
+def update_product(db: Session, user, product_id: int, payload: ProductUpdate) -> ProductAdminRead:
+    """Met a jour les informations d'un produit (proprietaire d'une boutique qui le vend)."""
+    product = db.get(Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Produit introuvable"
+        )
+    # Verifier que l'utilisateur possede au moins une boutique qui vend ce produit
+    store_ids = [p.id for p in db.query(Store).filter(Store.owner_id == user.id).all()]
+    has_access = db.query(Price).filter(
+        Price.product_id == product_id, Price.store_id.in_(store_ids)
+    ).first()
+    if has_access is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous ne vendez pas ce produit dans une de vos boutiques",
+        )
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] is not None:
+        data["slug"] = slugify(data["name"])
+    for field, value in data.items():
+        setattr(product, field, value)
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    return ProductAdminRead.model_validate(product)
+
+
+def delete_product(db: Session, user, product_id: int) -> None:
+    """Desactive un produit (soft delete)."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Produit introuvable"
+        )
+    store_ids = [p.id for p in db.query(Store).filter(Store.owner_id == user.id).all()]
+    has_access = db.query(Price).filter(
+        Price.product_id == product_id, Price.store_id.in_(store_ids)
+    ).first()
+    if has_access is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous ne vendez pas ce produit dans une de vos boutiques",
+        )
+    product.is_active = False
+    db.add(product)
+    db.commit()
+
+
+# --------------------------------------------------- CRUD prix (commercant)
+def create_price(
+    db: Session, user, store_id: int, product_id: int, payload
+) -> PriceManageRead:
+    """Ajoute ou met a jour une offre de prix pour un produit dans une boutique."""
+    store = _ensure_store_owner_of_price(db, store_id, user)
+    product = db.get(Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Produit introuvable"
+        )
+    existing = (
+        db.query(Price)
+        .filter(Price.store_id == store_id, Price.product_id == product_id)
+        .first()
+    )
+    if existing:
+        existing.amount = payload.amount
+        existing.is_available = payload.is_available
+        existing.updated_at = utcnow()
+        price = existing
+    else:
+        price = Price(
+            product_id=product_id,
+            store_id=store_id,
+            amount=payload.amount,
+            is_available=payload.is_available,
+        )
+        db.add(price)
+    db.commit()
+    db.refresh(price)
+    return PriceManageRead(
+        id=price.id,
+        product_id=price.product_id,
+        product_name=product.name,
+        amount=float(price.amount),
+        currency=price.currency,
+        is_available=price.is_available,
+        verification_status=price.verification_status,
+        updated_at=price.updated_at,
+        confirmed_count=price.confirmed_count,
+    )
+
+
+def list_my_prices(db: Session, user, store_id: int) -> list[PriceManageRead]:
+    """Liste les offres de prix d'une boutique du commerçant."""
+    _ensure_store_owner_of_price(db, store_id, user)
+    prices = (
+        db.query(Price)
+        .filter(Price.store_id == store_id)
+        .join(Product, Price.product_id == Product.id)
+        .order_by(Product.name)
+        .all()
+    )
+    return [
+        PriceManageRead(
+            id=p.id,
+            product_id=p.product_id,
+            product_name=p.product.name if p.product else None,
+            amount=float(p.amount),
+            currency=p.currency,
+            is_available=p.is_available,
+            verification_status=p.verification_status,
+            updated_at=p.updated_at,
+            confirmed_count=p.confirmed_count,
+        )
+        for p in prices
+    ]
+
+
+def update_price(db: Session, user, price_id: int, payload) -> PriceManageRead:
+    """Met a jour une offre de prix (proprietaire de la boutique)."""
+    price = db.get(Price, price_id)
+    if price is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Offre de prix introuvable"
+        )
+    _ensure_store_owner_of_price(db, price.store_id, user)
+    if payload.amount is not None:
+        price.amount = payload.amount
+    if payload.is_available is not None:
+        price.is_available = payload.is_available
+    price.updated_at = utcnow()
+    db.add(price)
+    db.commit()
+    db.refresh(price)
+    product = db.get(Product, price.product_id)
+    return PriceManageRead(
+        id=price.id,
+        product_id=price.product_id,
+        product_name=product.name if product else None,
+        amount=float(price.amount),
+        currency=price.currency,
+        is_available=price.is_available,
+        verification_status=price.verification_status,
+        updated_at=price.updated_at,
+        confirmed_count=price.confirmed_count,
+    )
+
+
+def delete_price(db: Session, user, price_id: int) -> None:
+    """Supprime une offre de prix."""
+    price = db.get(Price, price_id)
+    if price is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Offre de prix introuvable"
+        )
+    _ensure_store_owner_of_price(db, price.store_id, user)
+    db.delete(price)
+    db.commit()

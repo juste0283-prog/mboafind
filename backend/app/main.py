@@ -15,6 +15,7 @@ from app.routers import (
     auth,
     categories,
     health,
+    professional_dashboard,
     professionals,
     products,
     reports,
@@ -62,6 +63,7 @@ app.include_router(products.router, prefix=settings.API_V1_PREFIX)
 app.include_router(stores.stores_router, prefix=settings.API_V1_PREFIX)
 app.include_router(stores.prices_router, prefix=settings.API_V1_PREFIX)
 app.include_router(professionals.router, prefix=settings.API_V1_PREFIX)
+app.include_router(professional_dashboard.router, prefix=settings.API_V1_PREFIX)
 app.include_router(service_requests.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reviews.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX)

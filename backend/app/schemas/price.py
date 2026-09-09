@@ -1,10 +1,24 @@
-"""Schemas Pydantic des prix / offres d'un produit."""
+"""Schémas Pydantic des prix / offres d'un produit."""
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import PriceVerificationStatus
+
+
+class PriceCreate(BaseModel):
+    """Ajouter ou mettre a jour une offre de prix pour un produit dans une boutique."""
+
+    amount: float = Field(gt=0)
+    is_available: bool = True
+
+
+class PriceUpdate(BaseModel):
+    """Modifier une offre de prix existante."""
+
+    amount: float | None = Field(default=None, gt=0)
+    is_available: bool | None = None
 
 
 class PriceRead(BaseModel):
@@ -24,6 +38,22 @@ class PriceRead(BaseModel):
     updated_at: datetime
     confirmed_count: int = 0
     last_confirmed_at: datetime | None = None
+
+
+class PriceManageRead(BaseModel):
+    """Offre de prix dans le dashboard commerant."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    product_id: int
+    product_name: str | None = None
+    amount: float
+    currency: str
+    is_available: bool
+    verification_status: PriceVerificationStatus
+    updated_at: datetime
+    confirmed_count: int = 0
 
 
 class PriceConfirmRead(BaseModel):

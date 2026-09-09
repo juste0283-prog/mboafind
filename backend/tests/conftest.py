@@ -166,9 +166,9 @@ def demo_professional(client: TestClient, pro_headers):
 
     db = SessionLocal()
     try:
-        pro = db.query(Professional).first()
+        user = db.query(User).filter(User.email == "pro@test.com").first()
+        pro = db.query(Professional).filter(Professional.user_id == user.id).first()
         if pro is None:
-            user = db.query(User).filter(User.email == "pro@test.com").first()
             pro = Professional(
                 user_id=user.id,
                 profession="Réparateur de téléphones",

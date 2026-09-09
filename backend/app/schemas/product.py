@@ -2,10 +2,30 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.category import CategorySummary
 from app.schemas.price import PriceRead
+
+
+class ProductCreate(BaseModel):
+    """Donnees requises pour creer un produit (commercant)."""
+
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    brand: str | None = None
+    image_url: str | None = None
+    category_id: int | None = None
+
+
+class ProductUpdate(BaseModel):
+    """Champs modifiables par le proprietaire."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    brand: str | None = None
+    image_url: str | None = None
+    category_id: int | None = None
 
 
 class ProductListItem(BaseModel):
@@ -27,6 +47,23 @@ class ProductListItem(BaseModel):
     updated_at: datetime | None = None
     rating_avg: float | None = None
     rating_count: int = 0
+
+
+class ProductAdminRead(BaseModel):
+    """Produit dans le dashboard commerçant (avec son propre store_id)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    slug: str
+    brand: str | None = None
+    description: str | None = None
+    image_url: str | None = None
+    category_id: int | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class ProductDetail(BaseModel):

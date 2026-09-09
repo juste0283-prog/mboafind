@@ -28,10 +28,26 @@ export default function MainLayout() {
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1 overflow-x-auto">
             <NavLink to="/" end className={navLinkClass}>
               Accueil
             </NavLink>
+            <NavLink to="/recherche" className={navLinkClass}>
+              Produits
+            </NavLink>
+            <NavLink to="/professionnels" className={navLinkClass}>
+              Professionnels
+            </NavLink>
+            {user && user.role === "COMMERCANT" && (
+              <NavLink to="/commercant" className={navLinkClass}>
+                Ma boutique
+              </NavLink>
+            )}
+            {user && user.role === "PROFESSIONNEL" && (
+              <NavLink to="/professionnel" className={navLinkClass}>
+                Mon espace
+              </NavLink>
+            )}
             {user && (
               <NavLink to="/profil" className={navLinkClass}>
                 Mon profil
