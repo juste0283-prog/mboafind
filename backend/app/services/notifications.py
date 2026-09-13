@@ -11,7 +11,7 @@ import json
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models import Notification
+from app.models import Notification, PriceAlert, User
 from app.models.enums import NotificationType
 from app.utils.time import utcnow
 
@@ -38,6 +38,67 @@ def create_notification(
     )
     db.add(notification)
     return notification
+
+
+def notify_price_updated(
+    db: Session,
+    product,
+    store,
+    price,
+    old_amount: float | None,
+    new_amount: float,
+) -> int:
+    """Notifie en temps reel tous les comptes abonnes aux changements de prix.
+
+    Seuls les changements de montant sont diffuses (un nouveau prix n'est pas
+    un changement). Chaque utilisateur ayant active ``notify_price_changes``
+    recoit une notification PRICE_CHANGED, sauf le proprietaire de l'offre et
+    sauf ceux qui suivent deja ce produit via une alerte de prix active (ils
+    recoivent l'alerte ciblee dediee). Retourne le nombre de destinataires.
+    """
+    if product is None or store is None:
+        return 0
+    old = float(old_amount) if old_amount is not None else None
+    new = float(new_amount)
+    if old is None or abs(old - new) < 0.01:
+        return 0
+    title = "Prix mis a jour"
+    expected = round((old - new) / old * 100, 1) if old > 0 and old > new else 0.0
+    message = (
+        f"{product.name} : {old:,.0f} -> {new:,.0f} FCFA"
+        + (f" (-{expected:.1f}%)" if expected > 0 else "")
+        + f" chez {store.name}."
+    )
+    data = {"price_id": price.id, "product_id": product.id, "store_id": store.id}
+    tracked_ids = (
+        db.query(PriceAlert.user_id)
+        .filter(
+            PriceAlert.product_id == product.id,
+            PriceAlert.is_active.is_(True),
+            PriceAlert.triggered.is_(False),
+        )
+        .distinct()
+    )
+    recipients = (
+        db.query(User.id)
+        .filter(
+            User.notify_price_changes.is_(True),
+            User.is_active.is_(True),
+            User.id != store.owner_id,
+            User.id.notin_(tracked_ids),
+        )
+        .all()
+    )
+    for (user_id,) in recipients:
+        create_notification(
+            db,
+            user_id,
+            NotificationType.PRICE_CHANGED,
+            title=title,
+            message=message,
+            data=data,
+        )
+    return len(recipients)
 
 
 def list_notifications(

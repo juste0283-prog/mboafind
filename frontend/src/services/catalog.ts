@@ -5,6 +5,7 @@ import type {
   PriceConfirmResult,
   PriceHistoryEntry,
   PriceManage,
+  PriceUpdatePage,
   ProductAdmin,
   ProductDetail,
   ProductImage,
@@ -76,6 +77,16 @@ export async function getMarketplace(
   params?: MarketplaceParams,
 ): Promise<MarketplacePage> {
   const { data } = await api.get<MarketplacePage>("/marketplace", { params });
+  return data;
+}
+
+export async function getPriceUpdates(
+  page = 1,
+  pageSize = 20,
+): Promise<PriceUpdatePage> {
+  const { data } = await api.get<PriceUpdatePage>("/price-updates", {
+    params: { page, page_size: pageSize },
+  });
   return data;
 }
 

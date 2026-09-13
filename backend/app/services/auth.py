@@ -63,6 +63,8 @@ def update_user(db: Session, user: User, data: UserUpdate) -> User:
         user.phone = data.phone
     if data.password is not None:
         user.password_hash = hash_password(data.password)
+    if data.notify_price_changes is not None:
+        user.notify_price_changes = data.notify_price_changes
     db.add(user)
     db.commit()
     db.refresh(user)

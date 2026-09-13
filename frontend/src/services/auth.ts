@@ -16,3 +16,10 @@ export async function fetchCurrentUser(): Promise<User> {
   const { data: user } = await api.get<User>("/auth/me");
   return user;
 }
+
+export async function updateCurrentUser(
+  data: Partial<Pick<User, "full_name" | "phone" | "notify_price_changes">>,
+): Promise<User> {
+  const { data: user } = await api.patch<User>("/users/me", data);
+  return user;
+}

@@ -5,12 +5,15 @@ import Spinner from "../components/common/Spinner";
 import ErrorMessage from "../components/common/ErrorMessage";
 import { useAuth } from "../hooks/useAuth";
 import { cancelRequest, listMyRequests } from "../services/serviceRequests";
+import { updateCurrentUser } from "../services/auth";
+import { getPriceUpdates } from "../services/catalog";
 import { listMyReports, listMyReviews } from "../services/reviews";
 import { listFavorites, removeFavorite } from "../services/favorites";
 import { deletePriceAlert, listPriceAlerts, updatePriceAlert } from "../services/priceAlerts";
 import type {
   Favorite,
   PriceAlert,
+  PriceUpdate,
   Report,
   Review,
   ServiceRequest,
@@ -37,6 +40,11 @@ export default function Profile() {
   const [reports, setReports] = useState<Report[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [priceUpdates, setPriceUpdates] = useState<PriceUpdate[]>([]);
+  const [notifyPriceChanges, setNotifyPriceChanges] = useState(
+    user?.notify_price_changes ?? true,
+  );
+  const [notifyBusy, setNotifyBusy] = useState(false);
   const [tab, setTab] = useState<
     "requests" | "reviews" | "reports" | "favorites" | "alerts"
   >("requests");
@@ -112,6 +120,7 @@ export default function Profile() {
       setReports(reportsPage.items);
       setFavorites(favoritesList);
       setAlerts(alertsList);
+      getPriceUpdates(1, 30).then((page) => setPriceUpdates(page.items));
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -124,6 +133,27 @@ export default function Profile() {
       loadHistory();
     }
   }, [user, loadHistory]);
+
+  useEffect(() => {
+    setNotifyPriceChanges(user?.notify_price_changes ?? true);
+  }, [user?.notify_price_changes]);
+
+  const handleTogglePriceNotify = async () => {
+    if (notifyBusy) return;
+    setNotifyBusy(true);
+    setError(null);
+    try {
+      const updated = await updateCurrentUser({
+        notify_price_changes: !notifyPriceChanges,
+      });
+      setNotifyPriceChanges(updated.notify_price_changes);
+      setNotice(t("alerts.notifyUpdated"));
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setNotifyBusy(false);
+    }
+  };
 
   if (isLoading || !user) {
     return <Spinner fullScreen />;
@@ -388,7 +418,35 @@ export default function Profile() {
               ))}
             </div>
           ) : tab === "alerts" ? (
-            <div className="mt-4 space-y-3">
+            <div className="mt-4">
+              <div className={`${card} p-4`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className={`${heading} text-sm font-semibold`}>
+                      {t("alerts.intelligentTitle")}
+                    </p>
+                    <p className={`${muted} mt-0.5 text-xs`}>
+                      {t("alerts.intelligentDesc")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={notifyBusy}
+                    onClick={() => void handleTogglePriceNotify()}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50 ${
+                      notifyPriceChanges
+                        ? "bg-brand-green/20 text-brand-green"
+                        : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    {notifyPriceChanges
+                      ? t("alerts.smartOn")
+                      : t("alerts.smartOff")}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
               {alerts.length === 0 && (
                 <p className={`${muted} text-sm`}>{t("alerts.empty")}</p>
               )}
@@ -458,6 +516,55 @@ export default function Profile() {
                   </div>
                 </div>
               ))}
+              </div>
+
+              <div className="mt-6">
+                <h3 className={`${heading} text-sm font-semibold`}>
+                  {t("alerts.liveFeedsTitle")}
+                </h3>
+                {priceUpdates.length === 0 ? (
+                  <p className={`${muted} mt-2 text-sm`}>{t("alerts.liveFeedsEmpty")}</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {priceUpdates.slice(0, 15).map((update) => (
+                      <div
+                        key={update.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            <Link
+                              to={`/produits/${update.product_id}`}
+                              className="hover:text-brand-green hover:underline"
+                            >
+                              {update.product_name}
+                            </Link>
+                          </p>
+                          <p className={`${muted} text-xs`}>
+                            {update.store_name}
+                            {update.store_city ? ` · ${update.store_city}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {update.drop_percent > 0 && (
+                            <span className={badge.red}>
+                              {t("alerts.drop", {
+                                ratio: update.drop_percent.toFixed(1),
+                              })}
+                            </span>
+                          )}
+                          <p className="text-sm font-semibold">
+                            {formatNumber(update.amount)} {update.currency}
+                          </p>
+                          <p className={`${muted} text-xs`}>
+                            {formatDate(update.changed_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="mt-4 space-y-3">

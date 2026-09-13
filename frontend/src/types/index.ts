@@ -16,6 +16,7 @@ export interface User {
   phone?: string | null;
   role: UserRole;
   is_active: boolean;
+  notify_price_changes: boolean;
   created_at: string;
 }
 
@@ -119,6 +120,29 @@ export interface MarketplaceItem {
 export interface MarketplacePage {
   categories: MarketCategory[];
   items: MarketplaceItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PriceUpdate {
+  id: number;
+  product_id: number;
+  product_name: string;
+  image_url?: string | null;
+  store_id: number;
+  store_name: string;
+  store_city?: string | null;
+  amount: number;
+  currency: string;
+  is_available: boolean;
+  changed_at: string;
+  previous_amount?: number | null;
+  drop_percent: number;
+}
+
+export interface PriceUpdatePage {
+  items: PriceUpdate[];
   total: number;
   page: number;
   page_size: number;

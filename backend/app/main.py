@@ -21,6 +21,7 @@ from app.routers import (
     marketplace,
     notifications,
     price_alerts,
+    price_updates,
     professional_dashboard,
     professionals,
     products,
@@ -82,4 +83,5 @@ app.include_router(favorites.router, prefix=settings.API_V1_PREFIX)
 app.include_router(price_alerts.router, prefix=settings.API_V1_PREFIX)
 app.include_router(notifications.router, prefix=settings.API_V1_PREFIX)
 app.include_router(marketplace.router, prefix=settings.API_V1_PREFIX)
+app.include_router(price_updates.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)

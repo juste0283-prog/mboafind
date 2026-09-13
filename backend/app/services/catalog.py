@@ -41,6 +41,7 @@ from app.schemas.price import (
     PriceManageRead,
     PriceRead,
 )
+from app.schemas.price_update import PriceUpdatePage, PriceUpdateRead
 from app.schemas.product import (
     ProductAdminRead,
     ProductCreate,
@@ -51,7 +52,7 @@ from app.schemas.product import (
     ProductUpdate,
 )
 from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
-from app.services import price_alerts
+from app.services import notifications, price_alerts
 from app.services.geocode import geocode_address, geocode_enabled
 from app.services.images import delete_image_file, save_image_upload
 from app.services.notifications import create_notification
@@ -673,6 +674,69 @@ def get_price_history(db: Session, price_id: int, limit: int = 50) -> list[Price
     ]
 
 
+def list_price_updates(
+    db: Session, page: int = 1, page_size: int = 20
+) -> PriceUpdatePage:
+    """Flux temps reel des changements de prix (historique des prix publics).
+
+    Chaque entree correspond a une valeur enregistree d'une offre, avec la
+    boutique et le produit, et la baisse relative par rapport a la valeur
+    precedente de la meme offre le cas echeant.
+    """
+    page = max(1, page)
+    page_size = min(max(1, page_size), 50)
+    base = (
+        db.query(PriceHistory, Price, Product, Store)
+        .join(Price, PriceHistory.price_id == Price.id)
+        .join(Product, Price.product_id == Product.id)
+        .join(Store, Price.store_id == Store.id)
+    )
+    total = base.count()
+    rows = (
+        base.order_by(PriceHistory.changed_at.desc(), PriceHistory.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    items: list[PriceUpdateRead] = []
+    for history, price, product, store in rows:
+        previous = (
+            db.query(PriceHistory.amount)
+            .filter(
+                PriceHistory.price_id == price.id,
+                PriceHistory.id != history.id,
+            )
+            .order_by(PriceHistory.changed_at.desc(), PriceHistory.id.desc())
+            .first()
+        )
+        prev_amount = float(previous[0]) if previous else None
+        current = float(history.amount)
+        if prev_amount and prev_amount > current and prev_amount > 0:
+            drop = round((prev_amount - current) / prev_amount * 100, 1)
+        else:
+            drop = 0.0
+        items.append(
+            PriceUpdateRead(
+                id=history.id,
+                product_id=product.id,
+                product_name=product.name,
+                image_url=product.image_url,
+                store_id=store.id,
+                store_name=store.name,
+                store_city=store.city,
+                amount=current,
+                currency=history.currency,
+                is_available=history.is_available,
+                changed_at=history.changed_at,
+                previous_amount=prev_amount,
+                drop_percent=drop,
+            )
+        )
+    return PriceUpdatePage(
+        items=items, total=total, page=page, page_size=page_size
+    )
+
+
 # ----------------------------------------------------------------- boutique
 def get_store(db: Session, store_id: int) -> StoreDetail:
     """Fiche boutique : infos, produits vendus et avis publics (6.4)."""
@@ -1173,9 +1237,14 @@ def create_price(
         .filter(Price.store_id == store_id, Price.product_id == product_id)
         .first()
     )
+    old_amount: float | None = None
     if existing:
-        if float(existing.amount) != payload.amount or existing.is_available != payload.is_available:
+        amount_changed = float(existing.amount) != payload.amount
+        availability_changed = existing.is_available != payload.is_available
+        if amount_changed or availability_changed:
             _record_price_history(db, existing)
+        if amount_changed:
+            old_amount = float(existing.amount)
         existing.amount = payload.amount
         existing.is_available = payload.is_available
         existing.updated_at = utcnow()
@@ -1188,6 +1257,10 @@ def create_price(
             is_available=payload.is_available,
         )
         db.add(price)
+    if old_amount is not None:
+        notifications.notify_price_updated(
+            db, product, store, price, old_amount, payload.amount
+        )
     price_alerts.check_alerts_for_product(db, product_id)
     db.commit()
     db.refresh(price)
@@ -1246,16 +1319,21 @@ def update_price(db: Session, user, price_id: int, payload) -> PriceManageRead:
     )
     if amount_changes or availability_changes:
         _record_price_history(db, price)
+    old_amount = float(price.amount) if amount_changes else None
     if payload.amount is not None:
         price.amount = payload.amount
     if payload.is_available is not None:
         price.is_available = payload.is_available
     price.updated_at = utcnow()
     db.add(price)
+    product = db.get(Product, price.product_id)
+    if old_amount is not None:
+        notifications.notify_price_updated(
+            db, product, store, price, old_amount, float(price.amount)
+        )
     price_alerts.check_alerts_for_product(db, price.product_id)
     db.commit()
     db.refresh(price)
-    product = db.get(Product, price.product_id)
     return PriceManageRead(
         id=price.id,
         product_id=price.product_id,

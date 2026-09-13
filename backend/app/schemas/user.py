@@ -30,6 +30,7 @@ class UserRead(UserBase):
     id: int
     role: UserRole
     is_active: bool
+    notify_price_changes: bool
     created_at: datetime
 
 
@@ -39,3 +40,4 @@ class UserUpdate(BaseModel):
     full_name: str | None = None
     phone: str | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    notify_price_changes: bool | None = None
