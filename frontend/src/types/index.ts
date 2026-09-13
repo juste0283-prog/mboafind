@@ -465,6 +465,76 @@ export interface ReviewAdmin extends Review {
   target_label?: string | null;
 }
 
+// ---------------- Console d'administration ----------------
+
+export interface AdminOverview {
+  users_total: number;
+  users_clients: number;
+  users_commersants: number;
+  users_professionals: number;
+  users_admins: number;
+  stores_total: number;
+  stores_verified: number;
+  stores_pending: number;
+  products_total: number;
+  prices_total: number;
+  categories_total: number;
+  reports_total: number;
+  reports_pending: number;
+  reviews_total: number;
+  reviews_pending: number;
+  service_requests_total: number;
+  price_updates_total: number;
+}
+
+export interface AdminStoreItem {
+  id: number;
+  name: string;
+  city?: string | null;
+  province?: string | null;
+  phone?: string | null;
+  is_verified: boolean;
+  is_active: boolean;
+  owner_email?: string | null;
+  products_count: number;
+}
+
+export interface AdminStoreList {
+  items: AdminStoreItem[];
+  total: number;
+}
+
+export interface AdminProfessionalItem {
+  id: number;
+  user_id: number;
+  user_email: string;
+  user_name?: string | null;
+  profession: string;
+  city?: string | null;
+  is_verified: boolean;
+  is_active: boolean;
+  services_count: number;
+}
+
+export interface AdminProfessionalList {
+  items: AdminProfessionalItem[];
+  total: number;
+}
+
+export interface AdminUserItem {
+  id: number;
+  email: string;
+  full_name?: string | null;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AdminUserList {
+  items: AdminUserItem[];
+  total: number;
+}
+
 // ---------------- Profil professionnel (dashboard) ----------------
 
 export interface ProfessionalProfile {
