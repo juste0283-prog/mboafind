@@ -42,6 +42,11 @@ class Product(Base):
     price_alerts: Mapped[list["PriceAlert"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )
+    images: Mapped[list["ProductImage"]] = relationship(
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductImage.position",
+    )
 
     def __repr__(self) -> str:
         return f"<Product id={self.id} name={self.name!r}>"

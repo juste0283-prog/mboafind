@@ -26,6 +26,7 @@ from app.models.enums import (
 )
 from app.models.price_confirmation import PriceConfirmation
 from app.models.price_history import PriceHistory
+from app.models.product_image import ProductImage
 from app.schemas.category import CategoryRead, CategorySummary
 from app.schemas.price import (
     PriceConfirmRead,
@@ -37,12 +38,14 @@ from app.schemas.product import (
     ProductAdminRead,
     ProductCreate,
     ProductDetail,
+    ProductImageRead,
     ProductListItem,
     ProductPage,
     ProductUpdate,
 )
 from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
 from app.services.geocode import geocode_address, geocode_enabled
+from app.services.images import delete_image_file, save_image_upload
 from app.services.trust import compute_trust_score
 from app.utils.slug import slugify, normalize_text, split_terms
 from app.utils.time import utcnow
@@ -389,6 +392,16 @@ def get_product(
     # Offres disponibles d'abord, puis par prix croissant.
     offers.sort(key=lambda o: (not o.is_available, o.amount))
 
+    images = [
+        ProductImageRead.model_validate(img)
+        for img in (
+            db.query(ProductImage)
+            .filter(ProductImage.product_id == product_id)
+            .order_by(ProductImage.position)
+            .all()
+        )
+    ]
+
     return ProductDetail(
         id=product.id,
         name=product.name,
@@ -406,6 +419,7 @@ def get_product(
         rating_avg=avg,
         rating_count=count,
         offers=offers,
+        images=images,
     )
 
 
@@ -741,6 +755,129 @@ def delete_product(db: Session, user, product_id: int) -> None:
     product.is_active = False
     db.add(product)
     db.commit()
+
+
+# --------------------------------------------------- images des produits
+def _ensure_product_seller(db: Session, user, product_id: int) -> Product:
+    """Verifie que l'utilisateur vend ce produit et retourne le produit."""
+    product = db.get(Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Produit introuvable"
+        )
+    store_ids = [p.id for p in db.query(Store).filter(Store.owner_id == user.id).all()]
+    has_access = db.query(Price).filter(
+        Price.product_id == product_id, Price.store_id.in_(store_ids)
+    ).first()
+    if has_access is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous ne vendez pas ce produit dans une de vos boutiques",
+        )
+    return product
+
+
+def list_product_images(db: Session, product_id: int) -> list[ProductImageRead]:
+    """Liste les images d'un produit (publique, ordre de la galerie)."""
+    return [
+        ProductImageRead.model_validate(img)
+        for img in (
+            db.query(ProductImage)
+            .filter(ProductImage.product_id == product_id)
+            .order_by(ProductImage.position)
+            .all()
+        )
+    ]
+
+
+def add_product_image(
+    db: Session, user, product_id: int, file
+) -> ProductImageRead:
+    """Enregistre une image pour un produit du commerçant.
+
+    La premiere image devient automatiquement l'image principale. Une image
+    ajoutee est placee en fin de galerie.
+    """
+    product = _ensure_product_seller(db, user, product_id)
+    url = save_image_upload(file, product_id)
+    existing = db.query(ProductImage).filter(ProductImage.product_id == product_id).all()
+    next_position = max((img.position for img in existing), default=-1) + 1
+
+    image = ProductImage(
+        product_id=product_id,
+        url=url,
+        is_primary=not existing,
+        position=next_position,
+    )
+    db.add(image)
+    if not existing:
+        product.image_url = url
+        db.add(product)
+    db.commit()
+    db.refresh(image)
+
+    record = db.get(ProductImage, image.id)
+    return ProductImageRead.model_validate(record)
+
+
+def _set_single_primary(db: Session, product_id: int, primary: ProductImage) -> None:
+    """Une seule image principale par produit."""
+    db.query(ProductImage).filter(ProductImage.product_id == product_id).update(
+        {ProductImage.is_primary: False}
+    )
+    primary.is_primary = True
+    product = db.get(Product, product_id)
+    if product is not None:
+        product.image_url = primary.url
+        db.add(product)
+    db.add(primary)
+    db.commit()
+
+
+def set_primary_product_image(
+    db: Session, user, product_id: int, image_id: int
+) -> ProductImageRead:
+    """Definit l'image principale d'un produit (proprietaire uniquement)."""
+    _ensure_product_seller(db, user, product_id)
+    image = db.get(ProductImage, image_id)
+    if image is None or image.product_id != product_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Image introuvable"
+        )
+    _set_single_primary(db, product_id, image)
+    db.refresh(image)
+    return ProductImageRead.model_validate(image)
+
+
+def delete_product_image(db: Session, user, product_id: int, image_id: int) -> None:
+    """Supprime une image d'un produit (proprietaire uniquement).
+
+    Si l'image supprimee etait l'image principale, la premiere image restante
+    (ou le champ image_url du produit) reprend le role principal.
+    """
+    product = _ensure_product_seller(db, user, product_id)
+    image = db.get(ProductImage, image_id)
+    if image is None or image.product_id != product_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Image introuvable"
+        )
+    was_primary = image.is_primary
+    url = image.url
+    db.delete(image)
+    db.flush()
+    remaining = (
+        db.query(ProductImage)
+        .filter(ProductImage.product_id == product_id)
+        .order_by(ProductImage.position)
+        .all()
+    )
+    if was_primary and remaining:
+        _set_single_primary(db, product_id, remaining[0])
+    elif not remaining:
+        product.image_url = None
+        db.add(product)
+    db.commit()
+    delete_image_file(url, product_id)
 
 
 # --------------------------------------------------- CRUD prix (commercant)

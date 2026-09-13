@@ -1,13 +1,14 @@
 """Point d'entree de l'API MboaFind (FastAPI).
 
-Met en place CORS, la creation des tables en developpement (lifespan)
-et monte les routers sous le prefixe /api/v1.
+Met en place CORS, la creation des tables en developpement (lifespan),
+le dossier des images uploadees et monte les routers sous /api/v1.
 """
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.database.database import init_db
@@ -27,6 +28,7 @@ from app.routers import (
     stores,
     users,
 )
+from app.services.images import uploads_root
 
 
 @asynccontextmanager
@@ -37,6 +39,7 @@ async def lifespan(_app: FastAPI):
     """
     if settings.ENVIRONMENT != "production":
         init_db()
+    uploads_root()
     yield
 
 
@@ -56,6 +59,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Fichiers des images de produits (uploads locaux, evoluables vers le cloud)
+app.mount("/uploads", StaticFiles(directory=uploads_root()), name="uploads")
 
 # Routers REST sous /api/v1
 app.include_router(health.router, prefix=settings.API_V1_PREFIX)

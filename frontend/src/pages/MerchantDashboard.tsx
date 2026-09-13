@@ -1,21 +1,24 @@
 // Tableau de bord commençant : gestion des boutiques (avec carte), produits et prix.
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ChangeEvent } from "react";
 import {
   createOrUpdatePrice,
   createProduct,
   createStore,
   deletePrice,
   deleteProduct,
+  deleteProductImage,
   deleteStore,
   listCategories,
   listMyStores,
   listStorePrices,
   listStoreProducts,
+  setPrimaryImage,
   updatePrice,
   updateProduct,
   updateStore,
+  uploadProductImage,
 } from "../services/catalog";
-import type { Category, PriceManage, ProductAdmin, Store } from "../types";
+import type { Category, PriceManage, ProductAdmin, ProductImage, Store } from "../types";
 import ErrorMessage from "../components/common/ErrorMessage";
 import Spinner from "../components/common/Spinner";
 import LocationPicker from "../components/map/LocationPicker";
@@ -82,6 +85,12 @@ export default function MerchantDashboard() {
   const [priceAmount, setPriceAmount] = useState("");
   const [priceAvailable, setPriceAvailable] = useState(true);
   const [priceSubmitting, setPriceSubmitting] = useState(false);
+
+  // Images du produit en cours de gestion
+  const [productImages, setProductImages] = useState<ProductImage[]>([]);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageBusy, setImageBusy] = useState<number | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   // Ecoutes du géocode inversé (remplissage adresse / ville).
   useEffect(() => {
@@ -213,6 +222,8 @@ export default function MerchantDashboard() {
     setProductCategory("");
     setPriceAmount("");
     setPriceAvailable(true);
+    setProductImages([]);
+    setImageError(null);
     setProductModal(true);
   };
 
@@ -224,7 +235,60 @@ export default function MerchantDashboard() {
     setProductCategory(product.category_id ? String(product.category_id) : "");
     setPriceAmount(price ? String(price.amount) : "");
     setPriceAvailable(price ? price.is_available : true);
+    setProductImages(product.images ?? []);
+    setImageError(null);
     setProductModal(true);
+  };
+
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedStore || !selectedProduct) return;
+    setImageUploading(true);
+    setImageError(null);
+    try {
+      const image = await uploadProductImage(selectedProduct.id, file);
+      setProductImages((prev) => [...prev, image]);
+    } catch (err) {
+      setImageError(getApiErrorMessage(err));
+    } finally {
+      setImageUploading(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleImageSetPrimary = async (image: ProductImage) => {
+    if (!selectedProduct || imageBusy !== null) return;
+    setImageBusy(image.id);
+    setImageError(null);
+    try {
+      const updated = await setPrimaryImage(selectedProduct.id, image.id);
+      setProductImages((prev) =>
+        prev.map((img) =>
+          img.id === updated.id
+            ? updated
+            : { ...img, is_primary: img.id === updated.id ? true : false },
+        ),
+      );
+    } catch (err) {
+      setImageError(getApiErrorMessage(err));
+    } finally {
+      setImageBusy(null);
+    }
+  };
+
+  const handleImageDelete = async (image: ProductImage) => {
+    if (!selectedProduct || imageBusy !== null) return;
+    if (!window.confirm(t("merchant.deleteImageConfirm"))) return;
+    setImageBusy(image.id);
+    setImageError(null);
+    try {
+      await deleteProductImage(selectedProduct.id, image.id);
+      setProductImages((prev) => prev.filter((img) => img.id !== image.id));
+    } catch (err) {
+      setImageError(getApiErrorMessage(err));
+    } finally {
+      setImageBusy(null);
+    }
   };
 
   const handleProductSubmit = async (event: FormEvent) => {
@@ -602,7 +666,7 @@ export default function MerchantDashboard() {
         >
           <form
             onSubmit={handleProductSubmit}
-            className={`${card} w-full max-w-md p-6 shadow-xl`}
+            className={`${card} w-full max-w-lg p-6 shadow-xl`}
             onClick={(event) => event.stopPropagation()}
           >
             <h3 className={`${heading} text-lg`}>
@@ -663,6 +727,63 @@ export default function MerchantDashboard() {
                 />
                 {t("merchant.availableCheck")}
               </label>
+
+              {selectedProduct && (
+                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                  <p className={`${heading} text-sm font-semibold`}>{t("merchant.productImages")}</p>
+                  {productImages.length > 0 && (
+                    <div className="mt-2 grid grid-cols-4 gap-2">
+                      {productImages.map((image) => (
+                        <div
+                          key={image.id}
+                          className="relative overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+                        >
+                          <img src={image.url} alt={productName} className="aspect-square w-full object-cover" />
+                          {image.is_primary && (
+                            <span className={`${badge.green} absolute left-1 top-1 text-[10px]`}>
+                              {t("merchant.primaryImage")}
+                            </span>
+                          )}
+                          <div className="flex justify-between bg-slate-50 px-1 py-0.5 dark:bg-slate-800">
+                            <button
+                              type="button"
+                              disabled={imageBusy !== null || image.is_primary}
+                              onClick={() => handleImageSetPrimary(image)}
+                              title={t("merchant.setPrimaryImage")}
+                              className="text-[10px] font-medium text-brand-green hover:underline disabled:opacity-40"
+                            >
+                              {t("merchant.setPrimaryImage")}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={imageBusy !== null}
+                              onClick={() => handleImageDelete(image)}
+                              title={t("merchant.deleteImage")}
+                              className="text-[10px] font-medium text-brand-red hover:underline disabled:opacity-40"
+                            >
+                              {t("merchant.deleteImage")}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className="mt-3 block cursor-pointer">
+                    <span className={`${btnSecondary} block py-1.5 text-center text-xs`}>
+                      {imageUploading ? t("merchant.imageUploading") : t("merchant.uploadImage")}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={imageUploading}
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                  {imageError && <p className={`${noticeCls.warning} mt-2 text-xs`}>{imageError}</p>}
+                  <p className={`${muted} mt-2 text-xs`}>{t("merchant.imagesTip")}</p>
+                </div>
+              )}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setProductModal(false)} className={btnSecondary}>

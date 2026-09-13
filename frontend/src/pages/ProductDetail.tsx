@@ -21,6 +21,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../i18n/I18nContext";
 import ErrorMessage from "../components/common/ErrorMessage";
 import Spinner from "../components/common/Spinner";
+import ProductGallery from "../components/products/ProductGallery";
 import ProductStoresMap from "../components/map/ProductStoresMap";
 import { getApiErrorMessage } from "../utils/apiError";
 import {
@@ -319,34 +320,42 @@ export default function ProductDetail() {
       )}
 
       <div className={`${card} mt-4 p-6`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="grid gap-6 md:grid-cols-[minmax(0,320px)_1fr]">
+          <ProductGallery
+            images={product.images}
+            imageUrl={product.image_url}
+            name={product.name}
+          />
+
           <div>
-            {product.brand && (
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                {product.brand}
-              </p>
-            )}
-            <h1 className={`${heading} text-2xl`}>{product.name}</h1>
-            {product.category && (
-              <p className={`${muted} mt-1 text-sm`}>
-                {t("search.category")} : {product.category.name}
-              </p>
-            )}
-            {product.description && (
-              <p className={`${muted} mt-3 text-sm`}>{product.description}</p>
-            )}
-          </div>
-          {user && (
-            <button
-              type="button"
-              onClick={handleToggleFavorite}
-              disabled={favoriteBusy}
-              className={`${isFavorite ? btnSecondary : btnPrimary} shrink-0`}
-            >
-              {isFavorite ? "★ " + t("product.favoriteRemove") : "☆ " + t("product.favoriteAdd")}
-            </button>
-          )}
-        </div>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                {product.brand && (
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    {product.brand}
+                  </p>
+                )}
+                <h1 className={`${heading} text-2xl`}>{product.name}</h1>
+                {product.category && (
+                  <p className={`${muted} mt-1 text-sm`}>
+                    {t("search.category")} : {product.category.name}
+                  </p>
+                )}
+                {product.description && (
+                  <p className={`${muted} mt-3 text-sm`}>{product.description}</p>
+                )}
+              </div>
+              {user && (
+                <button
+                  type="button"
+                  onClick={handleToggleFavorite}
+                  disabled={favoriteBusy}
+                  className={`${isFavorite ? btnSecondary : btnPrimary} shrink-0`}
+                >
+                  {isFavorite ? "★ " + t("product.favoriteRemove") : "☆ " + t("product.favoriteAdd")}
+                </button>
+              )}
+            </div>
 
         {product.min_price !== null && product.min_price !== undefined ? (
           <div className="mt-4 flex flex-wrap items-center gap-6 border-t border-slate-100 pt-4 dark:border-slate-700">
@@ -470,6 +479,8 @@ export default function ProductDetail() {
             </Link>
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 flex items-center justify-between">

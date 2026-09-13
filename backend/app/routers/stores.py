@@ -1,6 +1,6 @@
 """Routes des boutiques (/api/v1/stores) et confirmation de prix."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user, get_db, require_roles
@@ -12,7 +12,12 @@ from app.schemas.price import (
     PriceManageRead,
     PriceUpdate,
 )
-from app.schemas.product import ProductAdminRead, ProductCreate, ProductUpdate
+from app.schemas.product import (
+    ProductAdminRead,
+    ProductCreate,
+    ProductImageRead,
+    ProductUpdate,
+)
 from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
 from app.services import catalog
 
@@ -175,6 +180,66 @@ def delete_product(
 ) -> None:
     """Desactive un produit (soft delete)."""
     catalog.delete_product(db, current_user, product_id)
+
+
+# ------------------------------------------------ images d'un produit
+@stores_router.get(
+    "/products/{product_id}/images",
+    response_model=list[ProductImageRead],
+    summary="Lister les images d'un produit",
+)
+def list_product_images(
+    product_id: int,
+    db: Session = Depends(get_db),
+) -> list[ProductImageRead]:
+    """Liste les images d'un produit (publique)."""
+    return catalog.list_product_images(db, product_id)
+
+
+@stores_router.post(
+    "/products/{product_id}/images",
+    response_model=ProductImageRead,
+    status_code=201,
+    summary="Ajouter une image a un produit",
+)
+def add_product_image(
+    product_id: int,
+    file: UploadFile = File(...),
+    current_user=Depends(require_roles(UserRole.COMMERCANT)),
+    db: Session = Depends(get_db),
+) -> ProductImageRead:
+    """Ajoute une image a un produit du commerçant. La premiere image devient principale."""
+    return catalog.add_product_image(db, current_user, product_id, file)
+
+
+@stores_router.post(
+    "/products/{product_id}/images/{image_id}/primary",
+    response_model=ProductImageRead,
+    summary="Definir l'image principale",
+)
+def set_primary_image(
+    product_id: int,
+    image_id: int,
+    current_user=Depends(require_roles(UserRole.COMMERCANT)),
+    db: Session = Depends(get_db),
+) -> ProductImageRead:
+    """Passe une image en principale (proprietaire uniquement)."""
+    return catalog.set_primary_product_image(db, current_user, product_id, image_id)
+
+
+@stores_router.delete(
+    "/products/{product_id}/images/{image_id}",
+    status_code=204,
+    summary="Supprimer une image",
+)
+def delete_product_image(
+    product_id: int,
+    image_id: int,
+    current_user=Depends(require_roles(UserRole.COMMERCANT)),
+    db: Session = Depends(get_db),
+) -> None:
+    """Supprime une image et son fichier associe."""
+    catalog.delete_product_image(db, current_user, product_id, image_id)
 
 
 # --------------------------------------------------- modification prix

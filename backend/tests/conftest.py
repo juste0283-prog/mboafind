@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 TEST_DB_PATH = Path(__file__).resolve().parent / "test_mboafind.db"
+TEST_UPLOAD_DIR = Path(__file__).resolve().parent / "test_uploads"
 
 # Base de test propre a chaque session
 if TEST_DB_PATH.exists():
@@ -18,6 +19,7 @@ os.environ["ENVIRONMENT"] = "testing"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH.as_posix()}"
 os.environ["SECRET_KEY"] = "test-secret-key-pour-les-tests-uniquement"
 os.environ["GEOCODE_ENABLED"] = "false"
+os.environ["UPLOAD_DIR"] = TEST_UPLOAD_DIR.as_posix()
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

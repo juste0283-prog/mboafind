@@ -58,3 +58,6 @@ desktop.ini
 .coverage
 htmlcov/
 coverage.xml
+
+# ---- Uploads de test (images produits) ----
+backend/tests/test_uploads/

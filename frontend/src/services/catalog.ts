@@ -6,6 +6,7 @@ import type {
   PriceManage,
   ProductAdmin,
   ProductDetail,
+  ProductImage,
   ProductPage,
   Store,
   StoreDetail,
@@ -175,4 +176,41 @@ export async function updatePrice(
 
 export async function deletePrice(priceId: number): Promise<void> {
   await api.delete(`/prices/${priceId}`);
+}
+
+// ---------------- Images de produits ----------------
+
+export async function listProductImages(productId: number): Promise<ProductImage[]> {
+  const { data } = await api.get<ProductImage[]>(`/stores/products/${productId}/images`);
+  return data;
+}
+
+export async function uploadProductImage(
+  productId: number,
+  file: File,
+): Promise<ProductImage> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<ProductImage>(
+    `/stores/products/${productId}/images`,
+    form,
+  );
+  return data;
+}
+
+export async function setPrimaryImage(
+  productId: number,
+  imageId: number,
+): Promise<ProductImage> {
+  const { data } = await api.post<ProductImage>(
+    `/stores/products/${productId}/images/${imageId}/primary`,
+  );
+  return data;
+}
+
+export async function deleteProductImage(
+  productId: number,
+  imageId: number,
+): Promise<void> {
+  await api.delete(`/stores/products/${productId}/images/${imageId}`);
 }

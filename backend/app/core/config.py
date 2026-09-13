@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # Geocodage des boutiques (position par defaut via Nominatim)
     GEOCODE_ENABLED: bool = True
 
+    # Stockage des images de produits (uploads locaux, remplacables par un cloud)
+    UPLOAD_DIR: str = "uploads"
+    UPLOAD_MAX_SIZE_MB: int = 5
+    UPLOAD_ALLOWED_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",

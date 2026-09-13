@@ -8,6 +8,19 @@ from app.schemas.category import CategorySummary
 from app.schemas.price import PriceRead
 
 
+class ProductImageRead(BaseModel):
+    """Image d'un produit (galerie / image principale)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    product_id: int
+    url: str
+    is_primary: bool
+    position: int
+    created_at: datetime
+
+
 class ProductCreate(BaseModel):
     """Donnees requises pour creer un produit (commercant)."""
 
@@ -64,6 +77,7 @@ class ProductAdminRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    images: list[ProductImageRead] = []
 
 
 class ProductDetail(BaseModel):
@@ -85,6 +99,7 @@ class ProductDetail(BaseModel):
     rating_avg: float | None = None
     rating_count: int = 0
     offers: list[PriceRead] = []
+    images: list[ProductImageRead] = []
 
 
 class ProductPage(BaseModel):

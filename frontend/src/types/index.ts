@@ -73,6 +73,15 @@ export interface ProductListItem {
   rating_count: number;
 }
 
+export interface ProductImage {
+  id: number;
+  product_id: number;
+  url: string;
+  is_primary: boolean;
+  position: number;
+  created_at: string;
+}
+
 export interface ProductPage {
   items: ProductListItem[];
   total: number;
@@ -134,6 +143,7 @@ export interface ProductDetail {
   rating_avg?: number | null;
   rating_count: number;
   offers: Offer[];
+  images: ProductImage[];
 }
 
 export interface Store {
@@ -183,6 +193,7 @@ export interface ProductAdmin {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  images: ProductImage[];
 }
 
 // ---------------- Professionnels & services ----------------
