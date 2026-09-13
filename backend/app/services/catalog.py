@@ -766,6 +766,8 @@ def get_store(db: Session, store_id: int) -> StoreDetail:
         latitude=store.latitude,
         longitude=store.longitude,
         opening_hours=store.opening_hours,
+        banner_url=store.banner_url,
+        logo_url=store.logo_url,
         is_verified=store.is_verified,
         owner_id=store.owner_id,
         rating_avg=round(float(avg), 2) if avg is not None else None,
@@ -853,6 +855,8 @@ def create_store(db: Session, user, payload: StoreCreate) -> StoreRead:
         latitude=payload.latitude,
         longitude=payload.longitude,
         opening_hours=payload.opening_hours,
+        banner_url=payload.banner_url,
+        logo_url=payload.logo_url,
     )
     _geocode_store_fallback(store)
     db.add(store)
@@ -926,6 +930,8 @@ def list_public_stores(
             latitude=s.latitude,
             longitude=s.longitude,
             opening_hours=s.opening_hours,
+            banner_url=s.banner_url,
+            logo_url=s.logo_url,
             is_verified=s.is_verified,
             is_active=s.is_active,
             owner_id=s.owner_id,

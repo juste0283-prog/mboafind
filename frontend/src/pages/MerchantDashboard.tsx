@@ -46,6 +46,8 @@ interface StoreFormState {
   address: string;
   phone: string;
   opening_hours: string;
+  banner_url: string;
+  logo_url: string;
   latitude: string;
   longitude: string;
 }
@@ -58,6 +60,8 @@ const createEmptyForm = (): StoreFormState => ({
   address: "",
   phone: "",
   opening_hours: "",
+  banner_url: "",
+  logo_url: "",
   latitude: "",
   longitude: "",
 });
@@ -159,6 +163,8 @@ export default function MerchantDashboard() {
     address: storeForm.address.trim() || null,
     phone: storeForm.phone.trim() || null,
     opening_hours: storeForm.opening_hours.trim() || null,
+    banner_url: storeForm.banner_url.trim() || null,
+    logo_url: storeForm.logo_url.trim() || null,
     latitude: storeForm.latitude ? Number(storeForm.latitude) : null,
     longitude: storeForm.longitude ? Number(storeForm.longitude) : null,
   });
@@ -197,6 +203,8 @@ export default function MerchantDashboard() {
       address: store.address ?? "",
       phone: store.phone ?? "",
       opening_hours: store.opening_hours ?? "",
+      banner_url: store.banner_url ?? "",
+      logo_url: store.logo_url ?? "",
       latitude: store.latitude !== null && store.latitude !== undefined ? String(store.latitude) : "",
       longitude: store.longitude !== null && store.longitude !== undefined ? String(store.longitude) : "",
     });
@@ -502,6 +510,20 @@ export default function MerchantDashboard() {
                 placeholder={t("merchant.storeHours")}
                 value={storeForm.opening_hours}
                 onChange={(event) => setStoreForm({ ...storeForm, opening_hours: event.target.value })}
+                className={input}
+              />
+              <input
+                type="text"
+                placeholder={t("merchant.storeBanner")}
+                value={storeForm.banner_url}
+                onChange={(event) => setStoreForm({ ...storeForm, banner_url: event.target.value })}
+                className={input}
+              />
+              <input
+                type="text"
+                placeholder={t("merchant.storeLogo")}
+                value={storeForm.logo_url}
+                onChange={(event) => setStoreForm({ ...storeForm, logo_url: event.target.value })}
                 className={input}
               />
               <textarea

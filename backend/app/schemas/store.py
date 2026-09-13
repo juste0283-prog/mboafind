@@ -19,6 +19,8 @@ class StoreCreate(BaseModel):
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     opening_hours: str | None = None
+    banner_url: str | None = None
+    logo_url: str | None = None
 
 
 class StoreUpdate(BaseModel):
@@ -34,6 +36,8 @@ class StoreUpdate(BaseModel):
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     opening_hours: str | None = None
+    banner_url: str | None = None
+    logo_url: str | None = None
 
 
 class StoreRead(BaseModel):
@@ -57,6 +61,8 @@ class StoreRead(BaseModel):
     owner_id: int
     rating_avg: float | None = None
     rating_count: int = 0
+    banner_url: str | None = None
+    logo_url: str | None = None
 
 
 class StoreDetail(StoreRead):

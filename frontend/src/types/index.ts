@@ -217,6 +217,8 @@ export interface Store {
   latitude?: number | null;
   longitude?: number | null;
   opening_hours?: string | null;
+  banner_url?: string | null;
+  logo_url?: string | null;
   is_verified: boolean;
   is_active: boolean;
   owner_id: number;

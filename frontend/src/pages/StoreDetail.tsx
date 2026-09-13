@@ -231,63 +231,85 @@ export default function StoreDetail() {
       )}
       {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
 
-      <div className={`${card} mt-4 p-6`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className={`${heading} flex items-center gap-2 text-2xl`}>
-              {store.name}
-              {store.is_verified && (
-                <span className={badge.green}>{t("store.verified")}</span>
+      <div className={`${card} mt-4 overflow-hidden`}>
+        {store.banner_url && (
+          <img
+            src={store.banner_url}
+            alt={store.name}
+            className="h-40 w-full object-cover sm:h-56"
+          />
+        )}
+        <div className="p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              {store.logo_url && (
+                <img
+                  src={store.logo_url}
+                  alt={store.name}
+                  className="h-16 w-16 shrink-0 rounded-full border border-slate-200 object-cover dark:border-slate-700"
+                />
               )}
-            </h1>
-            {store.city && <p className={`${muted} mt-1 text-sm`}>{store.city}</p>}
-            {store.description && (
-              <p className={`${muted} mt-3 max-w-2xl text-sm`}>{store.description}</p>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {(() => {
-              const wa = whatsappLink(store.phone);
-              const tel = telLink(store.phone);
-              return (
-                <>
-                  {wa && (
-                    <a
-                      href={wa}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`${btnSecondary} px-3 py-1.5 text-xs`}
-                    >
-                      {t("common.whatsapp")}
-                    </a>
+              <div className="min-w-0">
+                <h1 className={`${heading} flex items-center gap-2 text-2xl`}>
+                  {store.name}
+                  {store.is_verified && (
+                    <span className={badge.green}>{t("store.verified")}</span>
                   )}
-                  {tel && (
-                    <a href={tel} className={`${btnSecondary} px-3 py-1.5 text-xs`}>
-                      {t("common.call")}
-                    </a>
-                  )}
-                </>
-              );
-            })()}
-            {user && (
-              <button
-                type="button"
-                onClick={handleToggleFavorite}
-                disabled={favoriteBusy}
-                className={`${isFavorite ? btnSecondary : btnPrimary} shrink-0 px-3 py-1.5 text-xs`}
-              >
-                {isFavorite
-                  ? "★ " + t("favorites.remove")
-                  : "☆ " + t("favorites.add")}
+                </h1>
+                {store.city && <p className={`${muted} mt-1 text-sm`}>{store.city}</p>}
+                {store.description && (
+                  <p className={`${muted} mt-3 max-w-2xl text-sm`}>{store.description}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {user && user.id === store.owner_id && (
+                <Link to="/commercant" className={`${btnPrimary} px-3 py-1.5 text-xs`}>
+                  {t("store.manage")}
+                </Link>
+              )}
+              {(() => {
+                const wa = whatsappLink(store.phone);
+                const tel = telLink(store.phone);
+                return (
+                  <>
+                    {wa && (
+                      <a
+                        href={wa}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${btnSecondary} px-3 py-1.5 text-xs`}
+                      >
+                        {t("common.whatsapp")}
+                      </a>
+                    )}
+                    {tel && (
+                      <a href={tel} className={`${btnSecondary} px-3 py-1.5 text-xs`}>
+                        {t("common.call")}
+                      </a>
+                    )}
+                  </>
+                );
+              })()}
+              {user && (
+                <button
+                  type="button"
+                  onClick={handleToggleFavorite}
+                  disabled={favoriteBusy}
+                  className={`${isFavorite ? btnSecondary : btnPrimary} shrink-0 px-3 py-1.5 text-xs`}
+                >
+                  {isFavorite
+                    ? "★ " + t("favorites.remove")
+                    : "☆ " + t("favorites.add")}
+                </button>
+              )}
+              <button type="button" onClick={() => setReportOpen(true)} className={btnSecondary}>
+                {t("report.targetStore")}
               </button>
-            )}
-            <button type="button" onClick={() => setReportOpen(true)} className={btnSecondary}>
-              {t("report.targetStore")}
-            </button>
+            </div>
           </div>
-        </div>
 
-        <dl className="mt-6 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-4 dark:border-slate-700">
+          <dl className="mt-6 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-4 dark:border-slate-700">
           <div>
             <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{t("store.address")}</dt>
             <dd className="mt-0.5 text-sm text-slate-900 dark:text-slate-100">
@@ -318,6 +340,7 @@ export default function StoreDetail() {
             </dd>
           </div>
         </dl>
+        </div>
       </div>
 
       {/* ---- Carte & itinéraire ---- */}
