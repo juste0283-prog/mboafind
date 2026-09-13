@@ -90,6 +90,25 @@ export interface ProductPage {
   page_size: number;
 }
 
+export interface NaturalInterpretation {
+  detected: boolean;
+  query: string;
+  text: string;
+  city?: string | null;
+  category_id?: number | null;
+  category_key?: string | null;
+  min_price?: number | null;
+  max_price?: number | null;
+}
+
+export interface NaturalSearchResult {
+  interpretation: NaturalInterpretation;
+  items: ProductListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 // ---------------- Vitrine Marketplace ----------------
 
 export interface MarketCategory {

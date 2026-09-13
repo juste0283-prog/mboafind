@@ -245,6 +245,16 @@ export const translations: Record<Language, Dict> = {
     "search.geoUnsupported": "Votre navigateur ne permet pas la géolocalisation.",
     "search.geoError": "Impossible de récupérer votre position. Vérifiez les autorisations.",
     "search.distanceHint": "Activez « Utiliser ma position » pour trier par proximité.",
+    "search.naturalMode": "Mode langage naturel",
+    "search.naturalShort": "NL",
+    "search.naturalPlaceholder": "Ex : « ordinateur portable à Yaoundé, moins de 200 000 FCFA »",
+    "search.naturalTitle": "Interprétation détectée",
+    "search.naturalQuery": "Requête",
+    "search.naturalCity": "Ville",
+    "search.naturalCategory": "Catégorie",
+    "search.naturalMinPrice": "Prix min",
+    "search.naturalMaxPrice": "Prix max",
+    "search.naturalNone": "Aucune contrainte détectée : recherche sur le texte complet.",
 
     // ---- Annuaire « Où trouver » ----
     "storeDirectory.title": "Où trouver",
@@ -782,6 +792,16 @@ export const translations: Record<Language, Dict> = {
     "search.geoUnsupported": "Your browser does not support geolocation.",
     "search.geoError": "Could not get your position. Check browser permissions.",
     "search.distanceHint": "Enable “Use my location” to sort by proximity.",
+    "search.naturalMode": "Natural language mode",
+    "search.naturalShort": "NL",
+    "search.naturalPlaceholder": "Try: “laptop in Yaoundé, under 200,000 FCFA”",
+    "search.naturalTitle": "Detected interpretation",
+    "search.naturalQuery": "Query",
+    "search.naturalCity": "City",
+    "search.naturalCategory": "Category",
+    "search.naturalMinPrice": "Min price",
+    "search.naturalMaxPrice": "Max price",
+    "search.naturalFallback": "No constraint detected — keyword search used.",
 
     // ---- "Where to find" store directory ----
     "storeDirectory.title": "Where to find",

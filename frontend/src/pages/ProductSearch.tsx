@@ -1,8 +1,8 @@
 // Page Recherche Produits : barre de recherche, filtres, tri et comparaison de prix.
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { searchProducts, listCategories } from "../services/catalog";
-import type { Category, ProductListItem } from "../types";
+import { searchProducts, naturalSearchProducts, listCategories } from "../services/catalog";
+import type { Category, NaturalInterpretation, ProductListItem } from "../types";
 import ErrorMessage from "../components/common/ErrorMessage";
 import { getApiErrorMessage } from "../utils/apiError";
 import { useI18n } from "../i18n/I18nContext";
@@ -22,6 +22,8 @@ export default function ProductSearch() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [naturalMode, setNaturalMode] = useState(false);
+  const [interpretation, setInterpretation] = useState<NaturalInterpretation | null>(null);
 
   const [keyword, setKeyword] = useState(q);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
@@ -43,7 +45,19 @@ export default function ProductSearch() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    searchProducts({
+    setInterpretation(null);
+
+    const fetchProducts = () =>
+      naturalMode && keyword.trim()
+        ? naturalSearchProducts(keyword.trim(), { page, page_size: pageSize }).then(
+            (result) => {
+              if (cancelled) return;
+              setProducts(result.items);
+              setTotal(result.total);
+              setInterpretation(result.interpretation);
+            },
+          )
+        : searchProducts({
       search: q || undefined,
       category_id: categoryId ? Number(categoryId) : undefined,
       city: city || undefined,
@@ -67,10 +81,12 @@ export default function ProductSearch() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    fetchProducts();
+
     return () => {
       cancelled = true;
     };
-  }, [q, categoryId, city, minPrice, maxPrice, onlyAvailable, selectedSort, position, page]);
+  }, [keyword, naturalMode, q, categoryId, city, minPrice, maxPrice, onlyAvailable, selectedSort, position, page]);
 
   const locateMe = () => {
     if (!navigator.geolocation) {
@@ -123,12 +139,39 @@ export default function ProductSearch() {
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
           placeholder={t("search.placeholder")}
-          className={`${input} flex-1`}
+          className={input}
         />
         <button type="submit" className={`${btnPrimary} px-6`}>
           {t("common.search")}
         </button>
+        <button
+          type="button"
+          onClick={() => setNaturalMode((m) => !m)}
+          className={`${naturalMode ? btnPrimary : btnSecondary} px-4 text-sm`}
+        >
+          {t("search.naturalMode")}
+        </button>
       </form>
+
+      {naturalMode && (
+        <div className={`${card} mt-4 p-4 text-sm`}>
+          <p className={label}>{t("search.naturalTitle")}</p>
+          <ol className={`${muted} mt-2 list-decimal space-y-1 pl-5`}>
+            <li>{t("search.naturalStep1")}</li>
+            <li>{t("search.naturalStep2")}</li>
+            <li>{t("search.naturalStep3")}</li>
+          </ol>
+        </div>
+      )}
+
+      {interpretation && (
+        <div className={`${card} mt-4 border-l-4 border-brand-green p-4 text-sm`}>
+          <p className="font-semibold">
+            {t("search.detectedTitle")} ✨
+          </p>
+          <p className={`${muted} mt-1`}>{interpretation.text}</p>
+        </div>
+      )}
 
       <div className={`${card} mt-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6`}>
         <label className="block">

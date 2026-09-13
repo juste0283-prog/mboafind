@@ -9,6 +9,7 @@ import type {
   ProductAdmin,
   ProductDetail,
   ProductImage,
+  ProductListItem,
   ProductPage,
   Store,
   StoreDetail,
@@ -39,6 +40,35 @@ export async function searchProducts(
   params: ProductSearchParams,
 ): Promise<ProductPage> {
   const { data } = await api.get<ProductPage>("/products", { params });
+  return data;
+}
+
+export interface NaturalInterpretation {
+  detected: boolean;
+  query: string;
+  text: string;
+  city?: string | null;
+  category_id?: number | null;
+  category_key?: string | null;
+  min_price?: number | null;
+  max_price?: number | null;
+}
+
+export interface NaturalSearchResult {
+  interpretation: NaturalInterpretation;
+  items: ProductListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function naturalSearchProducts(
+  query: string,
+  params?: { page?: number; page_size?: number },
+): Promise<NaturalSearchResult> {
+  const { data } = await api.get<NaturalSearchResult>("/products/natural", {
+    params: { q: query, ...params },
+  });
   return data;
 }
 

@@ -6,9 +6,24 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_db, get_optional_user
 from app.models.user import User
 from app.schemas.product import ProductDetail, ProductPage
-from app.services import catalog
+from app.services import catalog, nlp_search
 
 router = APIRouter(prefix="/products", tags=["catalog"])
+
+
+@router.get("/natural", summary="Recherche en langage naturel")
+def natural_search(
+    q: str = Query(..., min_length=1, description="Requete libre en francais"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Interprete une requete libre (ville, categorie, budget) puis recherche.
+
+    Exemple : « ordinateur portable a Yaounde, moins de 200 000 francs ».
+    Renvoie l'interpretation (pour affichage) et la page de produits.
+    """
+    return nlp_search.natural_search(db, q, page=page, page_size=page_size)
 
 
 @router.get("", response_model=ProductPage, summary="Rechercher des produits")
