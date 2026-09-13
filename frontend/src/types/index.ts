@@ -303,6 +303,8 @@ export interface ServiceRequest {
   price?: number | null;
   currency: string;
   message?: string | null;
+  priority: "NORMAL" | "EXPRESS";
+  requested_deadline?: string | null;
   status: ServiceRequestStatus;
   created_at: string;
   updated_at: string;

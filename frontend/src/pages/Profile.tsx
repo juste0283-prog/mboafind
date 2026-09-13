@@ -280,10 +280,25 @@ export default function Profile() {
                 <div key={request.id} className={`${card} p-4`}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className={`${heading} font-semibold`}>{request.service_name}</p>
+                      <p className={`${heading} font-semibold`}>
+                        {request.service_name}
+                        {request.priority === "EXPRESS" && (
+                          <span className={`${badge.red} ml-2`}>
+                            {t("serviceExpress.badge")}
+                          </span>
+                        )}
+                      </p>
                       <p className={`${muted} text-sm`}>
                         {request.professional_name} · {request.profession}
                       </p>
+                      {request.priority === "EXPRESS" && request.requested_deadline && (
+                        <p className="mt-1 text-xs font-medium text-brand-red">
+                          ⏰{" "}
+                          {t("serviceExpress.deadline", {
+                            date: formatDate(request.requested_deadline),
+                          })}
+                        </p>
+                      )}
                       {request.price !== null && request.price !== undefined && (
                         <p className={`${muted} text-xs`}>
                           {formatNumber(request.price)} {request.currency}

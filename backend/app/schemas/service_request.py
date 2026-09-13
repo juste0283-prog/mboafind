@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import ServiceRequestStatus
+from app.models.enums import ServiceRequestPriority, ServiceRequestStatus
 
 
 class ServiceRequestCreate(BaseModel):
@@ -12,6 +12,8 @@ class ServiceRequestCreate(BaseModel):
 
     service_id: int
     message: str | None = Field(default=None, max_length=2000)
+    priority: ServiceRequestPriority = ServiceRequestPriority.NORMAL
+    requested_deadline: datetime | None = None
 
 
 class ServiceRequestRead(BaseModel):
@@ -29,6 +31,8 @@ class ServiceRequestRead(BaseModel):
     price: float | None = None
     currency: str = "XAF"
     message: str | None = None
+    priority: ServiceRequestPriority = ServiceRequestPriority.NORMAL
+    requested_deadline: datetime | None = None
     status: ServiceRequestStatus
     created_at: datetime
     updated_at: datetime

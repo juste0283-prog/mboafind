@@ -5,17 +5,24 @@ Workflow : creee (PENDING) -> acceptee (ACCEPTED) -> en cours (IN_PROGRESS)
 Le professionnel peut accepter, refuser, demarrer et terminer.
 """
 
+from datetime import timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models import Professional, Service, ServiceRequest
-from app.models.enums import NotificationType, ServiceRequestStatus
+from app.models.enums import (
+    NotificationType,
+    ServiceRequestPriority,
+    ServiceRequestStatus,
+)
 from app.schemas.service_request import (
     ServiceRequestCreate,
     ServiceRequestPage,
     ServiceRequestRead,
 )
 from app.services.notifications import create_notification
+from app.utils.time import utcnow
 
 
 def _to_read(request: ServiceRequest) -> ServiceRequestRead:
@@ -33,6 +40,8 @@ def _to_read(request: ServiceRequest) -> ServiceRequestRead:
         price=float(service.price) if service.price is not None else None,
         currency=service.currency,
         message=request.message,
+        priority=request.priority,
+        requested_deadline=request.requested_deadline,
         status=request.status,
         created_at=request.created_at,
         updated_at=request.updated_at,
@@ -67,24 +76,42 @@ def create_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Service introuvable ou indisponible",
         )
+    deadline = payload.requested_deadline
+    if deadline is not None:
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        if deadline < utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="L'echeance demandee est deja passee",
+            )
     request = ServiceRequest(
         client_id=client.id,
         service_id=service.id,
         message=payload.message,
+        priority=payload.priority,
+        requested_deadline=deadline,
         status=ServiceRequestStatus.PENDING,
     )
     db.add(request)
     professional = service.professional
+    express = request.priority == ServiceRequestPriority.EXPRESS
     if professional is not None and professional.user_id != client.id:
+        title = "Nouvelle demande urgente" if express else "Nouvelle demande de service"
+        message = (
+            f"{client.full_name or client.email} vous sollicite en priorite pour "
+            f"« {service.name} »."
+            + (f" A faire avant le {deadline:%d/%m/%Y}." if deadline else "")
+            if express
+            else f"{client.full_name or client.email} vous sollicite pour "
+            f"« {service.name} »."
+        )
         create_notification(
             db,
             professional.user_id,
             NotificationType.SERVICE_REQUEST_RECEIVED,
-            title="Nouvelle demande de service",
-            message=(
-                f"{client.full_name or client.email} vous sollicite pour "
-                f"« {service.name} »."
-            ),
+            title=title,
+            message=message,
             data={"request_id": request.id, "service_id": service.id},
         )
     db.commit()
@@ -169,7 +196,10 @@ def list_professional_requests(
     base = db.query(ServiceRequest).filter(ServiceRequest.service_id.in_(service_ids))
     total = base.count()
     requests = (
-        base.order_by(ServiceRequest.created_at.desc())
+        base.order_by(
+            (ServiceRequest.priority == ServiceRequestPriority.EXPRESS).desc(),
+            ServiceRequest.created_at.desc(),
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

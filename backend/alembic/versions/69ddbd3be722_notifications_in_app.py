@@ -33,7 +33,7 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
-op.create_index(op.f('ix_notifications_type'), 'notifications', ['type'], unique=False)
+    op.create_index(op.f('ix_notifications_type'), 'notifications', ['type'], unique=False)
     op.create_index(op.f('ix_notifications_user_id'), 'notifications', ['user_id'], unique=False)
     # ### end Alembic commands ###
 

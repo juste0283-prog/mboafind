@@ -10,7 +10,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
-from app.models.enums import ServiceRequestStatus
+from app.models.enums import ServiceRequestPriority, ServiceRequestStatus
 from app.utils.time import utcnow
 
 
@@ -25,6 +25,14 @@ class ServiceRequest(Base):
         ForeignKey("services.id", ondelete="CASCADE"), index=True
     )
     message: Mapped[str | None] = mapped_column(Text)
+    priority: Mapped[ServiceRequestPriority] = mapped_column(
+        Enum(ServiceRequestPriority),
+        default=ServiceRequestPriority.NORMAL,
+        nullable=False,
+    )
+    requested_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     status: Mapped[ServiceRequestStatus] = mapped_column(
         Enum(ServiceRequestStatus),
         default=ServiceRequestStatus.PENDING,

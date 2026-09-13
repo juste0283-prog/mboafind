@@ -311,13 +311,28 @@ export default function ProfessionalDashboard() {
               <div key={request.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className={`${heading} font-semibold`}>{request.service_name}</p>
+                    <p className={`${heading} font-semibold`}>
+                      {request.service_name}
+                      {request.priority === "EXPRESS" && (
+                        <span className={`${badge.red} ml-2`}>
+                          {t("serviceExpress.badge")}
+                        </span>
+                      )}
+                    </p>
                     <p className={`${muted} text-sm`}>
                       {t("prow.requestFrom", {
                         client: String(request.client_id),
                         service: request.profession ?? request.service_name,
                       })}
                     </p>
+                    {request.priority === "EXPRESS" && request.requested_deadline && (
+                      <p className="mt-1 text-xs font-medium text-brand-red">
+                        ⏰{" "}
+                        {t("serviceExpress.deadline", {
+                          date: formatDate(request.requested_deadline),
+                        })}
+                      </p>
+                    )}
                     {request.price !== null && request.price !== undefined && (
                       <p className={`${muted} text-sm`}>
                         {formatNumber(request.price)} {request.currency}

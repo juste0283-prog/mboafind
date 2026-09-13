@@ -4,11 +4,13 @@ import { api } from "./api";
 
 export async function createServiceRequest(
   serviceId: number,
-  message?: string,
+  options: { message?: string; express?: boolean; deadline?: string } = {},
 ): Promise<ServiceRequest> {
   const { data } = await api.post<ServiceRequest>("/service-requests", {
     service_id: serviceId,
-    message,
+    message: options.message,
+    priority: options.express ? "EXPRESS" : "NORMAL",
+    requested_deadline: options.deadline || null,
   });
   return data;
 }

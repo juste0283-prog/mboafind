@@ -50,6 +50,15 @@ class ServiceRequestStatus(str, enum.Enum):
         }[self]
 
 
+class ServiceRequestPriority(str, enum.Enum):
+    """Priorite d'une demande de service (Service Express).
+
+    EXPRESS : demande urgente, traitee en priorite par le professionnel.
+    """
+    NORMAL = "NORMAL"
+    EXPRESS = "EXPRESS"
+
+
 class ReportTargetType(str, enum.Enum):
     """Type d'objet vise par un signalement.
 

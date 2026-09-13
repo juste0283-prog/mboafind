@@ -419,6 +419,12 @@ export const translations: Record<Language, Dict> = {
     "pro.requestService": "Envoyer une demande de service",
     "pro.requestSent": "Demande envoyée ! Le professionnel a été notifié.",
     "pro.messagePlaceholder": "Décrivez votre besoin…",
+    "pro.expressLabel": "Urgent — priorité express",
+    "pro.deadlineLabel": "À faire avant le",
+
+    // ---- Service Express ----
+    "serviceExpress.badge": "URGENT",
+    "serviceExpress.deadline": "À faire avant le {date}",
     "pro.saveRequest": "Envoyer la demande",
     "pro.city": "Basé(e) à {city}",
     "pro.noServices": "Aucun service proposé pour le moment.",
@@ -907,6 +913,12 @@ export const translations: Record<Language, Dict> = {
     "pro.requestService": "Request a service",
     "pro.requestSent": "Request sent! The professional has been notified.",
     "pro.messagePlaceholder": "Describe your need…",
+    "pro.expressLabel": "Urgent — express priority",
+    "pro.deadlineLabel": "To be done before",
+
+    // ---- Service Express ----
+    "serviceExpress.badge": "URGENT",
+    "serviceExpress.deadline": "Due before {date}",
     "pro.saveRequest": "Send request",
     "pro.city": "Based in {city}",
     "pro.noServices": "No services offered yet.",

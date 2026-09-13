@@ -46,6 +46,8 @@ export default function ProfessionalDetail() {
 
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [message, setMessage] = useState("");
+  const [express, setExpress] = useState(false);
+  const [deadline, setDeadline] = useState("");
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
   const [reportOpen, setReportOpen] = useState(false);
@@ -106,9 +108,15 @@ export default function ProfessionalDetail() {
     setRequestSubmitting(true);
     setError(null);
     try {
-      await createServiceRequest(selectedService.id, message.trim() || undefined);
+      await createServiceRequest(selectedService.id, {
+        message: message.trim() || undefined,
+        express,
+        deadline: deadline ? new Date(deadline).toISOString() : undefined,
+      });
       setNotice(t("pro.requestSent"));
       setMessage("");
+      setExpress(false);
+      setDeadline("");
       setSelectedService(null);
     } catch (err) {
       setError(getApiErrorMessage(err));
@@ -263,6 +271,8 @@ export default function ProfessionalDetail() {
               onClick={() => {
                 setSelectedService(service);
                 setMessage("");
+                setExpress(false);
+                setDeadline("");
               }}
               className={`${btnPrimary} mt-3`}
             >
@@ -284,6 +294,26 @@ export default function ProfessionalDetail() {
             placeholder={t("pro.messagePlaceholder")}
             className={`${input} mt-3`}
           />
+          <label className="mt-3 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={express}
+              onChange={(event) => setExpress(event.target.checked)}
+              className="h-4 w-4 accent-[var(--color-brand-green)]"
+            />
+            {t("pro.expressLabel")}
+          </label>
+          {express && (
+            <label className="mt-3 block">
+              <span className={`${label} mb-1`}>{t("pro.deadlineLabel")}</span>
+              <input
+                type="datetime-local"
+                value={deadline}
+                onChange={(event) => setDeadline(event.target.value)}
+                className={input}
+              />
+            </label>
+          )}
           <div className="mt-3 flex gap-2">
             <button
               type="button"
