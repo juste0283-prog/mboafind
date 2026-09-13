@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Category, Price, Product, Review, Store
 from app.models.enums import (
+    NotificationType,
     PriceVerificationStatus,
     ReportStatus,
     ReportTargetType,
@@ -44,8 +45,10 @@ from app.schemas.product import (
     ProductUpdate,
 )
 from app.schemas.store import StoreCreate, StoreDetail, StoreRead, StoreUpdate
+from app.services import price_alerts
 from app.services.geocode import geocode_address, geocode_enabled
 from app.services.images import delete_image_file, save_image_upload
+from app.services.notifications import create_notification
 from app.services.trust import compute_trust_score
 from app.utils.slug import slugify, normalize_text, split_terms
 from app.utils.time import utcnow
@@ -459,6 +462,20 @@ def confirm_price(db: Session, user, price_id: int) -> PriceConfirmRead:
     if price.verification_status == PriceVerificationStatus.PENDING:
         price.verification_status = PriceVerificationStatus.VERIFIED
     db.add(price)
+    store = db.get(Store, price.store_id)
+    if store and store.owner_id != user.id:
+        product = db.get(Product, price.product_id)
+        create_notification(
+            db,
+            store.owner_id,
+            NotificationType.PRICE_CONFIRMED,
+            title="Prix confirme",
+            message=(
+                f"Un client a confirme votre prix de {float(price.amount):,.0f} FCFA "
+                f"pour {product.name if product else 'un produit'}."
+            ),
+            data={"price_id": price.id, "product_id": price.product_id, "store_id": store.id},
+        )
     db.commit()
     db.refresh(price)
     return PriceConfirmRead(
@@ -924,6 +941,7 @@ def create_price(
             is_available=payload.is_available,
         )
         db.add(price)
+    price_alerts.check_alerts_for_product(db, product_id)
     db.commit()
     db.refresh(price)
     return PriceManageRead(
@@ -987,6 +1005,7 @@ def update_price(db: Session, user, price_id: int, payload) -> PriceManageRead:
         price.is_available = payload.is_available
     price.updated_at = utcnow()
     db.add(price)
+    price_alerts.check_alerts_for_product(db, price.product_id)
     db.commit()
     db.refresh(price)
     product = db.get(Product, price.product_id)

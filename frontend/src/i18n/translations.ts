@@ -89,6 +89,19 @@ export const translations: Record<Language, Dict> = {
     "alerts.resume": "Réactiver",
     "alerts.delete": "Supprimer",
 
+    // ---- Notifications ----
+    "notifications.bell": "Notifications",
+    "notifications.unread": "{count} non lue(s)",
+    "notifications.unreadCount": "{count} notification(s) non lue(s).",
+    "notifications.allRead": "Vous n'avez aucune notification non lue.",
+    "notifications.markAllRead": "Tout marquer comme lu",
+    "notifications.empty": "Aucune notification pour le moment. Vous serez prévenu ici quand un prix baisse, qu'une demande change de statut ou qu'un signalement est traité.",
+    "notifications.viewAll": "Voir toutes les notifications →",
+    "notifications.read": "Marquer comme lu",
+    "notifications.delete": "Supprimer",
+    "notifications.deleteConfirm": "Supprimer définitivement cette notification ?",
+    "notifications.truncated": "Affichage des {shown} plus récentes sur {total}.",
+
     // ---- Administration ----
     "admin.title": "Administration",
     "admin.reports": "Signalements",
@@ -534,6 +547,19 @@ export const translations: Record<Language, Dict> = {
     "alerts.pause": "Disable",
     "alerts.resume": "Re-enable",
     "alerts.delete": "Delete",
+
+    // ---- Notifications ----
+    "notifications.bell": "Notifications",
+    "notifications.unread": "{count} unread",
+    "notifications.unreadCount": "{count} unread notification(s).",
+    "notifications.allRead": "You have no unread notifications.",
+    "notifications.markAllRead": "Mark all as read",
+    "notifications.empty": "No notifications yet. You'll be notified here when a price drops, a request changes status or a report is handled.",
+    "notifications.viewAll": "View all notifications →",
+    "notifications.read": "Mark as read",
+    "notifications.delete": "Delete",
+    "notifications.deleteConfirm": "Permanently delete this notification?",
+    "notifications.truncated": "Showing the {shown} most recent out of {total}.",
 
     // ---- Administration ----
     "admin.title": "Administration",

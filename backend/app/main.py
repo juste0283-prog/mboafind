@@ -18,6 +18,7 @@ from app.routers import (
     categories,
     favorites,
     health,
+    notifications,
     price_alerts,
     professional_dashboard,
     professionals,
@@ -78,4 +79,5 @@ app.include_router(reviews.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
 app.include_router(favorites.router, prefix=settings.API_V1_PREFIX)
 app.include_router(price_alerts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(notifications.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)

@@ -13,6 +13,7 @@ import ProfessionalDetail from "../pages/ProfessionalDetail";
 import ProfessionalDashboard from "../pages/ProfessionalDashboard";
 import ProfessionalSearch from "../pages/ProfessionalSearch";
 import MerchantDashboard from "../pages/MerchantDashboard";
+import Notifications from "../pages/Notifications";
 import Profile from "../pages/Profile";
 import Register from "../pages/Register";
 import StoreDetail from "../pages/StoreDetail";
@@ -45,6 +46,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
             </ProtectedRoute>
           }
         />

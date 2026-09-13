@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.models import Report, Review
 from app.models.enums import (
+    NotificationType,
     ReportStatus,
     ReportTargetType,
     ReviewModerationStatus,
 )
 from app.schemas.review import ReviewModerationUpdate, ReviewRead
+from app.services.notifications import create_notification
 
 
 def _report_admin_read(db: Session, report: Report) -> dict:
@@ -75,6 +77,25 @@ def decide_report(
         )
     report.status = new_status
     db.add(report)
+    if report.reporter_id is not None:
+        if new_status == ReportStatus.RESOLVED:
+            create_notification(
+                db,
+                report.reporter_id,
+                NotificationType.REPORT_RESOLVED,
+                title="Signalement traite",
+                message="Merci ! Votre signalement a ete traite par l'equipe de moderation.",
+                data={"report_id": report.id},
+            )
+        elif new_status == ReportStatus.DISMISSED:
+            create_notification(
+                db,
+                report.reporter_id,
+                NotificationType.REPORT_DISMISSED,
+                title="Signalement classe sans suite",
+                message="Votre signalement a ete examine mais classe sans suite.",
+                data={"report_id": report.id},
+            )
     db.commit()
     db.refresh(report)
     return _report_admin_read(db, report)

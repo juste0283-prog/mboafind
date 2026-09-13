@@ -362,6 +362,37 @@ export interface PriceAlertCreate {
   currency?: string;
 }
 
+// ---------------- Notifications in-app ----------------
+
+export type NotificationType =
+  | "price_alert_triggered"
+  | "service_request_received"
+  | "request_accepted"
+  | "request_declined"
+  | "request_in_progress"
+  | "request_completed"
+  | "request_cancelled"
+  | "report_resolved"
+  | "report_dismissed"
+  | "price_confirmed";
+
+export interface Notification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message: string;
+  data?: Record<string, unknown> | null;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+}
+
+export interface NotificationListResult {
+  items: Notification[];
+  total: number;
+  unread: number;
+}
+
 // ---------------- Modération admin ----------------
 
 export interface ReportAdmin extends Report {

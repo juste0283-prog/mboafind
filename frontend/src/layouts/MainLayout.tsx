@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../i18n/I18nContext";
 import { useTheme } from "../theme/ThemeContext";
+import NotificationBell from "../components/notifications/NotificationBell";
 import { page } from "../styles/classes";
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
@@ -112,6 +113,8 @@ export default function MainLayout() {
             >
               <span className="text-xs font-bold">{lang === "fr" ? "FR" : "EN"}</span>
             </ToggleButton>
+
+            {user && <NotificationBell />}
 
             {user ? (
               <>

@@ -16,6 +16,7 @@ from app.models.review import Review
 from app.models.report import Report
 from app.models.favorite import Favorite
 from app.models.price_alert import PriceAlert
+from app.models.notification import Notification
 
 __all__ = [
     "Base",
@@ -34,4 +35,5 @@ __all__ = [
     "Report",
     "Favorite",
     "PriceAlert",
+    "Notification",
 ]

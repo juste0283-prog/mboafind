@@ -10,6 +10,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models import PriceAlert, Price, Product
+from app.models.enums import NotificationType
+from app.services.notifications import create_notification
 from app.utils.time import utcnow
 
 
@@ -43,6 +45,49 @@ def _evaluate(alert: PriceAlert, current: float | None) -> None:
     elif not triggered:
         alert.triggered = False
         alert.triggered_at = None
+
+
+def check_alerts_for_product(db: Session, product_id: int) -> None:
+    """Evalue les alertes actives d'un produit apres un changement de prix.
+
+    Appele quand un commercant cree ou met a jour un prix : toute alerte
+    active non encore declenchee dont la cible est atteinte passe en
+    declenchee et l'utilisateur recoit une notification in-app. N'emet
+    aucune notification si le prix remonte (l'alerte redevient inactive).
+    """
+    # La session est configuree sans autoflush : on materialise le prix
+    # en cours de modification avant de lire le prix minimum observe.
+    db.flush()
+    current = current_min_price(db, product_id)
+    if current is None:
+        return
+    product = db.get(Product, product_id)
+    name = product.name if product else str(product_id)
+    alerts = (
+        db.query(PriceAlert)
+        .filter(
+            PriceAlert.product_id == product_id,
+            PriceAlert.is_active.is_(True),
+            PriceAlert.triggered.is_(False),
+        )
+        .all()
+    )
+    for alert in alerts:
+        if float(alert.target_price) >= current:
+            alert.triggered = True
+            alert.triggered_at = utcnow()
+            create_notification(
+                db,
+                alert.user_id,
+                NotificationType.PRICE_ALERT_TRIGGERED,
+                title="Alerte de prix atteinte",
+                message=(
+                    f"Le produit {name} est maintenant disponible a "
+                    f"{current:,.0f} FCFA, sous votre cible de "
+                    f"{float(alert.target_price):,.0f} FCFA."
+                ),
+                data={"product_id": product_id, "price": current},
+            )
 
 
 def build_alert_read(db: Session, alert: PriceAlert) -> dict:

@@ -9,12 +9,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models import Professional, Service, ServiceRequest
-from app.models.enums import ServiceRequestStatus
+from app.models.enums import NotificationType, ServiceRequestStatus
 from app.schemas.service_request import (
     ServiceRequestCreate,
     ServiceRequestPage,
     ServiceRequestRead,
 )
+from app.services.notifications import create_notification
 
 
 def _to_read(request: ServiceRequest) -> ServiceRequestRead:
@@ -73,6 +74,19 @@ def create_request(
         status=ServiceRequestStatus.PENDING,
     )
     db.add(request)
+    professional = service.professional
+    if professional is not None and professional.user_id != client.id:
+        create_notification(
+            db,
+            professional.user_id,
+            NotificationType.SERVICE_REQUEST_RECEIVED,
+            title="Nouvelle demande de service",
+            message=(
+                f"{client.full_name or client.email} vous sollicite pour "
+                f"« {service.name} »."
+            ),
+            data={"request_id": request.id, "service_id": service.id},
+        )
     db.commit()
     db.refresh(request)
     return _to_read(request)
@@ -120,6 +134,19 @@ def cancel_request(db: Session, client, request_id: int) -> ServiceRequestRead:
         )
     request.status = ServiceRequestStatus.CANCELLED
     db.add(request)
+    professional = request.service.professional
+    if professional is not None and professional.user_id != client.id:
+        create_notification(
+            db,
+            professional.user_id,
+            NotificationType.REQUEST_CANCELLED,
+            title="Demande annulee",
+            message=(
+                f"{client.full_name or client.email} a annule sa demande pour "
+                f"« {request.service.name} »."
+            ),
+            data={"request_id": request.id, "service_id": request.service_id},
+        )
     db.commit()
     db.refresh(request)
     return _to_read(request)
@@ -179,6 +206,39 @@ def _change_status(
         )
     request.status = new_status
     db.add(request)
+    if request.client_id != user.id:
+        type_map = {
+            ServiceRequestStatus.ACCEPTED: (
+                NotificationType.REQUEST_ACCEPTED,
+                "Demande acceptee",
+                f"{user.full_name or user.email} a accepte votre demande pour « {request.service.name} ».",
+            ),
+            ServiceRequestStatus.DECLINED: (
+                NotificationType.REQUEST_DECLINED,
+                "Demande refusee",
+                f"{user.full_name or user.email} a refuse votre demande pour « {request.service.name} ».",
+            ),
+            ServiceRequestStatus.IN_PROGRESS: (
+                NotificationType.REQUEST_IN_PROGRESS,
+                "Intervention demarree",
+                f"{user.full_name or user.email} a demarre l'intervention « {request.service.name} ».",
+            ),
+            ServiceRequestStatus.COMPLETED: (
+                NotificationType.REQUEST_COMPLETED,
+                "Intervention terminee",
+                f"{user.full_name or user.email} a termine l'intervention « {request.service.name} ».",
+            ),
+        }
+        item = type_map.get(new_status)
+        if item is not None:
+            create_notification(
+                db,
+                request.client_id,
+                item[0],
+                title=item[1],
+                message=item[2],
+                data={"request_id": request.id, "service_id": request.service_id},
+            )
     db.commit()
     db.refresh(request)
     return _to_read(request)

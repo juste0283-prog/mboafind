@@ -84,3 +84,24 @@ class FavoriteItemType(str, enum.Enum):
     PRODUCT = "PRODUCT"
     STORE = "STORE"
     PROFESSIONAL = "PROFESSIONAL"
+
+
+class NotificationType(str, enum.Enum):
+    """Types d'evenements qui generent une notification in-app.
+
+    Chaque valeur correspond a un declencheur metier :
+    - alerte de prix atteinte par un nouveau prix public ;
+    - demande de service recue / changee de statut ;
+    - moderation d'un signalement ;
+    - confirmation d'un prix par un client.
+    """
+    PRICE_ALERT_TRIGGERED = "price_alert_triggered"
+    SERVICE_REQUEST_RECEIVED = "service_request_received"
+    REQUEST_ACCEPTED = "request_accepted"
+    REQUEST_DECLINED = "request_declined"
+    REQUEST_IN_PROGRESS = "request_in_progress"
+    REQUEST_COMPLETED = "request_completed"
+    REQUEST_CANCELLED = "request_cancelled"
+    REPORT_RESOLVED = "report_resolved"
+    REPORT_DISMISSED = "report_dismissed"
+    PRICE_CONFIRMED = "price_confirmed"
