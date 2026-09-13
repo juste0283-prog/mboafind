@@ -79,6 +79,13 @@ export default function Home() {
             >
               {t("home.findProfessional")}
             </Link>
+            <span className="text-slate-300 dark:text-slate-600">|</span>
+            <Link
+              to="/boutiques"
+              className="text-slate-600 hover:text-brand-green hover:underline dark:text-slate-300"
+            >
+              {t("home.findStore")}
+            </Link>
             {!user && (
               <>
                 <span className="text-slate-300 dark:text-slate-600">|</span>

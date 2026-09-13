@@ -42,6 +42,7 @@ interface StoreFormState {
   name: string;
   description: string;
   city: string;
+  province: string;
   address: string;
   phone: string;
   opening_hours: string;
@@ -53,6 +54,7 @@ const createEmptyForm = (): StoreFormState => ({
   name: "",
   description: "",
   city: "",
+  province: "",
   address: "",
   phone: "",
   opening_hours: "",
@@ -153,6 +155,7 @@ export default function MerchantDashboard() {
     name: storeForm.name,
     description: storeForm.description.trim() || null,
     city: storeForm.city.trim() || null,
+    province: storeForm.province.trim() || null,
     address: storeForm.address.trim() || null,
     phone: storeForm.phone.trim() || null,
     opening_hours: storeForm.opening_hours.trim() || null,
@@ -190,6 +193,7 @@ export default function MerchantDashboard() {
       name: store.name,
       description: store.description ?? "",
       city: store.city ?? "",
+      province: store.province ?? "",
       address: store.address ?? "",
       phone: store.phone ?? "",
       opening_hours: store.opening_hours ?? "",
@@ -470,6 +474,13 @@ export default function MerchantDashboard() {
                 placeholder={t("merchant.storeCityField")}
                 value={storeForm.city}
                 onChange={(event) => setStoreForm({ ...storeForm, city: event.target.value })}
+                className={input}
+              />
+              <input
+                type="text"
+                placeholder={t("merchant.storeProvince")}
+                value={storeForm.province}
+                onChange={(event) => setStoreForm({ ...storeForm, province: event.target.value })}
                 className={input}
               />
               <input

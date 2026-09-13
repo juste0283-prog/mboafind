@@ -50,6 +50,20 @@ export async function getStore(storeId: number): Promise<StoreDetail> {
   return data;
 }
 
+export interface PublicStoreParams {
+  city?: string;
+  lat?: number;
+  lng?: number;
+  sort?: "recent" | "name" | "distance";
+}
+
+export async function listPublicStores(
+  params?: PublicStoreParams,
+): Promise<Store[]> {
+  const { data } = await api.get<Store[]>("/stores/public", { params });
+  return data;
+}
+
 export async function confirmPrice(priceId: number): Promise<PriceConfirmResult> {
   const { data } = await api.post<PriceConfirmResult>(`/prices/${priceId}/confirm`);
   return data;
@@ -73,6 +87,7 @@ export interface StoreCreatePayload {
   email?: string | null;
   address?: string | null;
   city?: string | null;
+  province?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   opening_hours?: string | null;

@@ -30,6 +30,8 @@ export default function ProductSearch() {
   const [selectedCategory, setSelectedCategory] = useState(categoryId ?? "");
   const [selectedCity, setSelectedCity] = useState(city);
   const [selectedSort, setSelectedSort] = useState(sort);
+  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const pageSize = 20;
 
@@ -49,6 +51,8 @@ export default function ProductSearch() {
       max_price: maxPrice ? Number(maxPrice) : undefined,
       available: onlyAvailable || undefined,
       sort: selectedSort || undefined,
+      lat: selectedSort === "distance" && position ? position.lat : undefined,
+      lng: selectedSort === "distance" && position ? position.lng : undefined,
       page,
       page_size: pageSize,
     })
@@ -66,7 +70,28 @@ export default function ProductSearch() {
     return () => {
       cancelled = true;
     };
-  }, [q, categoryId, city, minPrice, maxPrice, onlyAvailable, selectedSort, page]);
+  }, [q, categoryId, city, minPrice, maxPrice, onlyAvailable, selectedSort, position, page]);
+
+  const locateMe = () => {
+    if (!navigator.geolocation) {
+      setError(t("search.geoUnsupported"));
+      return;
+    }
+    setLocating(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setSelectedSort("distance");
+        setLocating(false);
+      },
+      () => {
+        setError(t("search.geoError"));
+        setLocating(false);
+      },
+      { timeout: 10000 },
+    );
+  };
 
   const handleSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -84,6 +109,7 @@ export default function ProductSearch() {
     { value: "recent", label: t("search.sortRecent") },
     { value: "price_asc", label: t("search.sortPriceAsc") },
     { value: "price_desc", label: t("search.sortPriceDesc") },
+    { value: "distance", label: t("search.sortDistance") },
   ];
 
   return (
@@ -180,6 +206,25 @@ export default function ProductSearch() {
           />
           {t("search.availableOnly")}
         </label>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={locateMe}
+          disabled={locating}
+          className={`${btnSecondary} px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          {locating ? t("common.loading") : t("search.useMyLocation")}
+        </button>
+        {selectedSort === "distance" && !position && (
+          <p className={`${muted} text-xs`}>{t("search.distanceHint")}</p>
+        )}
+        {selectedSort === "distance" && position && (
+          <p className={`${muted} text-xs`}>
+            📍 {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
+          </p>
+        )}
       </div>
 
       {error && <div className="mt-4"><ErrorMessage message={error} /></div>}

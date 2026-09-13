@@ -20,6 +20,7 @@ class Store(Base):
     email: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str | None] = mapped_column(String(500))
     city: Mapped[str | None] = mapped_column(String(120), index=True)
+    province: Mapped[str | None] = mapped_column(String(120))
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
     opening_hours: Mapped[str | None] = mapped_column(String(500))

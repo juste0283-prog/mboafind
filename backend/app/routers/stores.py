@@ -26,6 +26,25 @@ prices_router = APIRouter(prefix="/prices", tags=["catalog"])
 
 
 # --------------------------------------------------------- lecture publique
+@stores_router.get(
+    "/public",
+    response_model=list[StoreRead],
+    summary="Annuaire des boutiques",
+)
+def public_stores(
+    city: str | None = Query(default=None),
+    lat: float | None = Query(default=None, ge=-90, le=90),
+    lng: float | None = Query(default=None, ge=-180, le=180),
+    sort: str = Query(default="recent", pattern="^(recent|name|distance)$"),
+    db: Session = Depends(get_db),
+) -> list[StoreRead]:
+    """Liste publique des boutiques actives (utile pour la carte « Où trouver »).
+
+    Tri : recent / name / distance (proximite haversine requiert lat/lng).
+    """
+    return catalog.list_public_stores(db, city=city, lat=lat, lng=lng, sort=sort)
+
+
 @stores_router.get("/{store_id}", response_model=StoreDetail, summary="Fiche boutique")
 def get_store(store_id: int, db: Session = Depends(get_db)) -> StoreDetail:
     """Fiche boutique : localisation, produits vendus et avis."""

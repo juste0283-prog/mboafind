@@ -17,6 +17,7 @@ import Notifications from "../pages/Notifications";
 import Profile from "../pages/Profile";
 import Register from "../pages/Register";
 import StoreDetail from "../pages/StoreDetail";
+import StoreDirectory from "../pages/StoreDirectory";
 import type { UserRole } from "../types";
 
 export default function AppRoutes() {
@@ -33,6 +34,7 @@ export default function AppRoutes() {
 
         <Route path="/recherche" element={<ProductSearch />} />
         <Route path="/produits/:id" element={<ProductDetail />} />
+        <Route path="/boutiques" element={<StoreDirectory />} />
         <Route path="/boutiques/:id" element={<StoreDetail />} />
         <Route path="/professionnels" element={<ProfessionalSearch />} />
         <Route path="/professionnels/:id" element={<ProfessionalDetail />} />

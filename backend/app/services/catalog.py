@@ -587,13 +587,14 @@ def _store_products(db: Session, store_id: int) -> list[ProductListItem]:
 
 
 # --------------------------------------------------- CRUD boutique (commercant)
-def _geocode_store_fallback(store: Store) -> None:
+def _geocode_store_fallback(store: Store, force: bool = False) -> None:
     """Positionne latitude/longitude depuis la ville/adresse si absentes.
 
     Best-effort : si le geocodage est desactive ou echoue, les coordonnees
-    restent vides et le commercant est averti cote client.
+    restent vides et le commercant est averti cote client. `force=True`
+    relance le geocodage meme si des coordonnees existent (adresse changee).
     """
-    if store.latitude is not None and store.longitude is not None:
+    if store.latitude is not None and store.longitude is not None and not force:
         return
     if not geocode_enabled():
         return
@@ -622,6 +623,7 @@ def create_store(db: Session, user, payload: StoreCreate) -> StoreRead:
         email=payload.email,
         address=payload.address,
         city=payload.city,
+        province=payload.province,
         latitude=payload.latitude,
         longitude=payload.longitude,
         opening_hours=payload.opening_hours,
@@ -631,6 +633,81 @@ def create_store(db: Session, user, payload: StoreCreate) -> StoreRead:
     db.commit()
     db.refresh(store)
     return StoreRead.model_validate(store)
+
+
+def _store_ratings(db: Session, store_ids) -> dict[int, tuple[float | None, int]]:
+    """Note moyenne et nombre d'avis approuves, par boutique."""
+    if not store_ids:
+        return {}
+    rows = (
+        db.query(Review.store_id, func.avg(Review.rating), func.count(Review.id))
+        .filter(
+            Review.store_id.in_(list(store_ids)),
+            Review.moderation_status.in_(_APPROVED),
+        )
+        .group_by(Review.store_id)
+        .all()
+    )
+    return {
+        sid: (round(float(avg), 2) if avg is not None else None, int(count))
+        for sid, avg, count in rows
+    }
+
+
+def list_public_stores(
+    db: Session,
+    *,
+    city: str | None = None,
+    lat: float | None = None,
+    lng: float | None = None,
+    sort: str = "recent",
+) -> list[StoreRead]:
+    """Annuaire public des boutiques actives, avec note moyenne.
+
+    Tri possible : "recent" (creees recemment), "name" (alphabetique),
+    ou "distance" (proximite haversine, requiert lat/lng ; les boutiques
+    sans coordonnees sont rejetees en fin de liste).
+    """
+    q = db.query(Store).filter(Store.is_active.is_(True))
+    if city and city.strip():
+        q = q.filter(Store.city.ilike(f"%{city.strip()}%"))
+    stores = q.all()
+    ratings = _store_ratings(db, [s.id for s in stores])
+
+    if sort == "distance" and lat is not None and lng is not None:
+        stores.sort(
+            key=lambda s: (
+                haversine_km(lat, lng, s.latitude, s.longitude)
+                if s.latitude is not None and s.longitude is not None
+                else float("inf")
+            )
+        )
+    elif sort == "name":
+        stores.sort(key=lambda s: (s.name or "").lower())
+    else:
+        stores.sort(key=lambda s: s.created_at, reverse=True)
+
+    return [
+        StoreRead(
+            id=s.id,
+            name=s.name,
+            description=s.description,
+            phone=s.phone,
+            email=s.email,
+            address=s.address,
+            city=s.city,
+            province=s.province,
+            latitude=s.latitude,
+            longitude=s.longitude,
+            opening_hours=s.opening_hours,
+            is_verified=s.is_verified,
+            is_active=s.is_active,
+            owner_id=s.owner_id,
+            rating_avg=ratings.get(s.id, (None, 0))[0],
+            rating_count=ratings.get(s.id, (None, 0))[1],
+        )
+        for s in stores
+    ]
 
 
 def list_my_stores(db: Session, user) -> list[StoreRead]:
@@ -652,9 +729,17 @@ def update_store(db: Session, user, store_id: int, payload: StoreUpdate) -> Stor
             status_code=status.HTTP_404_NOT_FOUND, detail="Boutique introuvable"
         )
     _ensure_store_owner(store, user)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
         setattr(store, field, value)
-    _geocode_store_fallback(store)
+    # Si la ville/l'adresse change sans coordonnees fournies : on relance
+    # le geocodage pour ne pas laisser une position obsolete.
+    if ({"address", "city"} & set(data)) and not (
+        {"latitude", "longitude"} & set(data)
+    ):
+        _geocode_store_fallback(store, force=True)
+    else:
+        _geocode_store_fallback(store)
     db.add(store)
     db.commit()
     db.refresh(store)

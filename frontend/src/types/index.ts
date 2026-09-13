@@ -154,6 +154,7 @@ export interface Store {
   email?: string | null;
   address?: string | null;
   city?: string | null;
+  province?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   opening_hours?: string | null;
