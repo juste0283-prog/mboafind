@@ -13,6 +13,7 @@ import ProfessionalDetail from "../pages/ProfessionalDetail";
 import ProfessionalDashboard from "../pages/ProfessionalDashboard";
 import ProfessionalSearch from "../pages/ProfessionalSearch";
 import MerchantDashboard from "../pages/MerchantDashboard";
+import Marketplace from "../pages/Marketplace";
 import Notifications from "../pages/Notifications";
 import Profile from "../pages/Profile";
 import Register from "../pages/Register";
@@ -33,6 +34,7 @@ export default function AppRoutes() {
         <Route path="/register" element={<Register />} />
 
         <Route path="/recherche" element={<ProductSearch />} />
+        <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/produits/:id" element={<ProductDetail />} />
         <Route path="/boutiques" element={<StoreDirectory />} />
         <Route path="/boutiques/:id" element={<StoreDetail />} />

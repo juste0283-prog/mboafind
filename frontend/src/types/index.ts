@@ -89,6 +89,41 @@ export interface ProductPage {
   page_size: number;
 }
 
+// ---------------- Vitrine Marketplace ----------------
+
+export interface MarketCategory {
+  id: number;
+  name: string;
+  slug: string;
+  count: number;
+}
+
+export interface MarketplaceItem {
+  id: number;
+  name: string;
+  slug: string;
+  brand?: string | null;
+  image_url?: string | null;
+  category?: CategorySummary | null;
+  min_price?: number | null;
+  max_price?: number | null;
+  avg_price?: number | null;
+  store_count: number;
+  is_available: boolean;
+  updated_at?: string | null;
+  rating_avg?: number | null;
+  rating_count: number;
+  deal_drop_percent?: number | null;
+}
+
+export interface MarketplacePage {
+  categories: MarketCategory[];
+  items: MarketplaceItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface Offer {
   id: number;
   store_id: number;

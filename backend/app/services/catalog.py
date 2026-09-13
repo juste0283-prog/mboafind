@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Category, Price, Product, Review, Store
 from app.models.enums import (
+    CategoryType,
     NotificationType,
     PriceVerificationStatus,
     ReportStatus,
@@ -29,6 +30,11 @@ from app.models.price_confirmation import PriceConfirmation
 from app.models.price_history import PriceHistory
 from app.models.product_image import ProductImage
 from app.schemas.category import CategoryRead, CategorySummary
+from app.schemas.marketplace import (
+    CategoryCount,
+    MarketplaceItem,
+    MarketplacePage,
+)
 from app.schemas.price import (
     PriceConfirmRead,
     PriceHistoryRead,
@@ -320,6 +326,160 @@ def search_products(
     )
 
 
+# ------------------------------------------------------- vitrine Marketplace
+def _offer_rows_for_marketplace(db, *, category_id: int | None = None) -> list:
+    """Rows (Price, Store, Product) de la vitrine : offres actives uniquement."""
+    q = (
+        db.query(Price, Store, Product)
+        .join(Store, Price.store_id == Store.id)
+        .join(Product, Price.product_id == Product.id)
+        .join(Category, Product.category_id == Category.id, isouter=True)
+        .filter(
+            Price.is_available.is_(True),
+            Product.is_active.is_(True),
+            Store.is_active.is_(True),
+        )
+    )
+    if category_id is not None:
+        q = q.filter(Product.category_id == category_id)
+    return q.all()
+
+
+def _category_counts_for_marketplace(db: Session) -> list[CategoryCount]:
+    """Categories de produits avec au moins une offre active + compteurs."""
+    rows = (
+        db.query(
+            Category.id,
+            Category.name,
+            Category.slug,
+            func.count(func.distinct(Product.id)),
+        )
+        .join(Product, Product.category_id == Category.id)
+        .join(Price, Price.product_id == Product.id)
+        .join(Store, Price.store_id == Store.id)
+        .filter(
+            Price.is_available.is_(True),
+            Product.is_active.is_(True),
+            Store.is_active.is_(True),
+            Category.type == CategoryType.PRODUCT,
+        )
+        .group_by(Category.id, Category.name, Category.slug)
+        .order_by(func.count(func.distinct(Product.id)).desc())
+        .all()
+    )
+    return [
+        CategoryCount(id=cid, name=name, slug=slug, count=count)
+        for cid, name, slug, count in rows
+    ]
+
+
+def _product_drop_percent(db: Session, product_id: int) -> float | None:
+    """Plus grande baisse (%) observee sur les offres actuelles du produit.
+
+    Compare le prix courant de chaque offre avec l'avant-derniere valeur
+    connue (dernier enregistrement de l'historique de prix).
+    """
+    prices = (
+        db.query(Price)
+        .filter(Price.product_id == product_id, Price.is_available.is_(True))
+        .all()
+    )
+    best: float | None = None
+    for price in prices:
+        last = (
+            db.query(PriceHistory)
+            .filter(PriceHistory.price_id == price.id)
+            .order_by(PriceHistory.changed_at.desc(), PriceHistory.id.desc())
+            .first()
+        )
+        if last is None:
+            continue
+        current = float(price.amount)
+        previous = float(last.amount)
+        if previous > current:
+            drop = (previous - current) / previous * 100
+            if best is None or drop > best:
+                best = drop
+    return round(best, 1) if best is not None else None
+
+
+def marketplace(
+    db: Session,
+    *,
+    category_id: int | None = None,
+    sort: str = "price_asc",
+    page: int = 1,
+    page_size: int = 20,
+) -> MarketplacePage:
+    """Vitrine multi-boutiques : categories + produits (toutes offres confondues).
+
+    Tri : price_asc (defaut), price_desc, recent, deals (plus grosses baisses
+    de prix d'abord, produits sans baisse en fin de liste).
+    """
+    page = max(1, page)
+    page_size = min(max(1, page_size), 50)
+
+    categories = _category_counts_for_marketplace(db)
+    rows = _offer_rows_for_marketplace(db, category_id=category_id)
+    stats = _aggregate_offers(rows)
+    if not stats:
+        return MarketplacePage(
+            categories=categories, items=[], total=0, page=page, page_size=page_size
+        )
+
+    products = {product.id: product for _, _, product in rows}
+    items: list[MarketplaceItem] = []
+    for pid, agg in stats.items():
+        product = products[pid]
+        avg, count = _rating_for_stores(db, agg["store_ids"])
+        items.append(
+            MarketplaceItem(
+                id=product.id,
+                name=product.name,
+                slug=product.slug,
+                brand=product.brand,
+                image_url=product.image_url,
+                category=_category_summary(product),
+                min_price=agg["min_price"],
+                max_price=agg["max_price"],
+                avg_price=round(agg["total"] / agg["count"], 2),
+                store_count=len(agg["store_ids"]),
+                is_available=agg["available"],
+                updated_at=agg["updated_at"],
+                rating_avg=avg,
+                rating_count=count,
+            )
+        )
+
+    if sort == "price_asc":
+        items.sort(key=lambda p: (p.min_price is None, p.min_price))
+    elif sort == "price_desc":
+        items.sort(key=lambda p: (p.max_price is None, -(p.max_price or 0)))
+    elif sort == "recent":
+        items.sort(key=lambda p: p.updated_at, reverse=True)
+    elif sort == "deals":
+        for item in items:
+            item.deal_drop_percent = _product_drop_percent(db, item.id)
+        items.sort(
+            key=lambda p: (p.deal_drop_percent is None, -(p.deal_drop_percent or 0))
+        )
+
+    total = len(items)
+    start = (page - 1) * page_size
+    page_items = items[start : start + page_size]
+    # Pour un tri non-deals, on calcule la baisse seulement pour la page affichee.
+    if sort != "deals":
+        for item in page_items:
+            item.deal_drop_percent = _product_drop_percent(db, item.id)
+    return MarketplacePage(
+        categories=categories,
+        items=page_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 def _closest_store_distance(product: Product, lat: float, lng: float) -> float:
     """Distance minimale (km) entre un point et les boutiques du produit."""
     distances = [
@@ -328,6 +488,8 @@ def _closest_store_distance(product: Product, lat: float, lng: float) -> float:
         if store.latitude is not None and store.longitude is not None
     ]
     return min(distances) if distances else math.inf
+
+
 def get_product(
     db: Session,
     product_id: int,

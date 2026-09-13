@@ -15,6 +15,7 @@ export const translations: Record<Language, Dict> = {
     // ---- Navigation ----
     "nav.home": "Accueil",
     "nav.products": "Produits",
+    "nav.marketplace": "Marketplace",
     "nav.stores": "Où trouver",
     "nav.professionals": "Professionnels",
     "nav.merchant": "Ma boutique",
@@ -226,6 +227,19 @@ export const translations: Record<Language, Dict> = {
     "storeDirectory.noRating": "Pas encore notée",
     "storeDirectory.at": "à {km} km",
     "storeDirectory.noMap": "Aucune boutique n'a encore de localisation sur la carte à afficher.",
+
+    // ---- Vitrine Marketplace ----
+    "marketplace.title": "Marketplace",
+    "marketplace.subtitle": "Le marché à portée de main : tous les produits de nos boutiques partenaires, au meilleur prix.",
+    "marketplace.sort": "Tri",
+    "marketplace.sortPriceAsc": "Prix croissant",
+    "marketplace.sortPriceDesc": "Prix décroissant",
+    "marketplace.sortRecent": "Plus récents",
+    "marketplace.sortDeals": "Bons plans (baisses de prix)",
+    "marketplace.all": "Toutes",
+    "marketplace.empty": "Aucun produit n'est disponible dans cette catégorie pour le moment. Revenez bientôt !",
+    "marketplace.results": "{count} produit(s)",
+    "marketplace.stores": "chez {count} boutique(s)",
 
     // ---- Détail produit ----
     "product.ComparisonTable": "Comparer les offres",
@@ -499,6 +513,7 @@ export const translations: Record<Language, Dict> = {
 
     "nav.home": "Home",
     "nav.products": "Products",
+    "nav.marketplace": "Marketplace",
     "nav.stores": "Where to find",
     "nav.professionals": "Professionals",
     "nav.merchant": "My store",
@@ -704,6 +719,19 @@ export const translations: Record<Language, Dict> = {
     "storeDirectory.noRating": "Not rated yet",
     "storeDirectory.at": "{km} km away",
     "storeDirectory.noMap": "No store has a map location to display yet.",
+
+    // ---- Marketplace showcase ----
+    "marketplace.title": "Marketplace",
+    "marketplace.subtitle": "The market at your fingertips: all products from our partner stores at the best price.",
+    "marketplace.sort": "Sort",
+    "marketplace.sortPriceAsc": "Price ascending",
+    "marketplace.sortPriceDesc": "Price descending",
+    "marketplace.sortRecent": "Most recent",
+    "marketplace.sortDeals": "Deals (price drops)",
+    "marketplace.all": "All",
+    "marketplace.empty": "No product is available in this category yet. Check back soon!",
+    "marketplace.results": "{count} product(s)",
+    "marketplace.stores": "at {count} store(s)",
     "search.pageInfo": "Page {page} of {pages}",
 
     "product.ComparisonTable": "Compare offers",

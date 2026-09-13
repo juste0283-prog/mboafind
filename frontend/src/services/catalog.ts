@@ -1,6 +1,7 @@
 // Appels API : catalogue (produits, boutiques, prix), recherche & comparaison.
 import type {
   Category,
+  MarketplacePage,
   PriceConfirmResult,
   PriceHistoryEntry,
   PriceManage,
@@ -61,6 +62,20 @@ export async function listPublicStores(
   params?: PublicStoreParams,
 ): Promise<Store[]> {
   const { data } = await api.get<Store[]>("/stores/public", { params });
+  return data;
+}
+
+export interface MarketplaceParams {
+  category_id?: number;
+  sort?: "price_asc" | "price_desc" | "recent" | "deals";
+  page?: number;
+  page_size?: number;
+}
+
+export async function getMarketplace(
+  params?: MarketplaceParams,
+): Promise<MarketplacePage> {
+  const { data } = await api.get<MarketplacePage>("/marketplace", { params });
   return data;
 }
 

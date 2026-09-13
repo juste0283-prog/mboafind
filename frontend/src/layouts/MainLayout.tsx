@@ -74,6 +74,9 @@ export default function MainLayout() {
             <NavLink to="/recherche" className={navLinkClass}>
               {t("nav.products")}
             </NavLink>
+            <NavLink to="/marketplace" className={navLinkClass}>
+              {t("nav.marketplace")}
+            </NavLink>
             <NavLink to="/boutiques" className={navLinkClass}>
               {t("nav.stores")}
             </NavLink>
